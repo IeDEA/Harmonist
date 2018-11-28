@@ -1,0 +1,144 @@
+---
+header-includes:
+  - \usepackage{booktabs}
+  - \usepackage{longtable}
+  - \usepackage{array}
+  - \usepackage{multirow}
+  - \usepackage[table]{xcolor}
+output: 
+  pdf_document:
+    fig_width: 6
+    fig_height: 9
+    fig_caption: true
+params:
+  allTables: "Tables" 
+  datasetSummary: "datasetSummary"
+  datasetQuality: "datasetQuality"
+  programSummary: "programSummary"
+  datasetDesc: "datasetDesc"
+  p: "p"
+  includeDataSummary: "includeDataSummary"
+  includeHistograms: "includeHistograms"
+  includeErrorSummary: "includeErrorSummary"
+  region: "region"
+  userDetails: "userDetails"
+  toReport: "toReport"
+  programsInReport: "programsInReport"
+  errorSummaryTables: "errorSummaryTables"
+---
+  
+```{r datasetLabel, echo = FALSE,  message=FALSE, warning=FALSE, results='asis'}
+
+tableData <- params$allTables
+program <- params$programsInReport
+userDetails <- params$userDetails
+if (userDetails$uploadconcept_mr == "MR000"){
+  headerMessage <- NULL
+} else headerMessage <- paste0("for Concept ", userDetails$uploadconcept_mr)
+```
+\centering
+
+# ![](iedeaLogoSmall.png) Harmonist Data Toolkit Report for Program: `r program`
+
+Dataset submitted `r headerMessage` from IeDEA Region `r userDetails$regionName`
+
+Report date: `r Sys.Date()`
+
+`r params$datasetDesc`
+
+Total number of patients from Program `r program` in dataset : `r params$datasetSummary$totalPatients`
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  message = FALSE,
+  warning = FALSE
+)
+```
+
+## Dataset Summary
+
+
+```{r summary2, echo=FALSE, fig.align='left', message=FALSE, warning=FALSE, results='asis'}
+print(params$datasetSummary$tableSummaryKable)
+```
+
+```{r summarytable, echo=FALSE, message=FALSE, warning=FALSE, fig.width = 6, fig.height = 3, results='asis'}
+if (params$includeDataSummary){
+  if (!is.null(params$datasetSummary$statsSummaryTable)){
+    print(params$datasetSummary$statsSummaryTable)
+  }
+  print(params$datasetSummary$visitStatsSummaryTable)
+  if (!is.null(params$datasetQuality$appearancePlot)){
+    print(params$datasetQuality$appearancePlot)
+  }
+}
+if (params$includeErrorSummary){
+   if (is.null(params$datasetQuality$missingAndUnknownPlot)){
+    cat("No important variables have missing/unknown entries")
+  } else {
+    print(params$datasetQuality$missingAndUnknownPlot)
+  }
+}
+```
+
+
+```{r calcHistHeight, echo = FALSE, message=FALSE, warning= FALSE, results='asis'}
+if (params$includeHistograms){
+  cat("## Histograms of important dates in PROGRAM  ", Hmisc::latexTranslate(program))
+  numberOfGraphs <- length(levels(params$p$data$DateName))
+  if (numberOfGraphs == 1){
+    histHeight <- 2.44
+  }
+  else if (numberOfGraphs == 6){
+    histHeight <- 4.35
+  } else histHeight <- numberOfGraphs*0.57 + 1.425
+} else histHeight <- 1 #dummy value since histograms not included
+
+```
+
+```{r summaryHistogram, echo=FALSE,fig.height=histHeight, fig.width=7, message=FALSE, warning=FALSE, results='asis'}
+if (params$includeHistograms){
+  params$p
+}
+
+```
+
+
+```{r kable, echo=FALSE, fig.height=5, fig.width=7.5, results='asis'}
+if (params$includeErrorSummary){
+  cat("## Data Quality Summary for PROGRAM ", Hmisc::latexTranslate(program),"  ")
+  cat("\n")
+  
+  if (is.null(params$programSummary$errorSummaries)){
+    cat("No errors detected in tables")
+  } else {
+    if (nrow(params$programSummary$errorSummaries$summaryFrame) == 0){
+      cat("No errors detected in tables")
+    }
+    if (nrow(params$programSummary$errorSummaries$summaryFrame) > 0){
+      cat("Note: download Error Detail spreadsheet for more information")
+      cat("\n")
+      
+      print(params$errorSummaryTables$errors)
+      
+      if (!is.null(params$errorSummaryTables$warnings)){
+        print(params$errorSummaryTables$warnings)
+      }
+      if (is.null(params$errorSummaryTables$badCodes)) cat("All coded variables had valid codes")
+      else print(params$errorSummaryTables$badCodes)
+    }
+  }
+  if (!is.null(params$programSummary$missingSummary)){
+    if (nrow(params$programSummary$missingSummary)>0){
+      temp <- kable(params$programSummary$missingSummary, row.names = FALSE,
+                    caption = "Summary of Important Missing Variable Entries", format = "latex",
+                    longtable = TRUE, booktabs = TRUE) %>%
+        kable_styling(latex_options = c("repeat_header"))
+      cat(temp)
+    }
+  }
+}
+
+```

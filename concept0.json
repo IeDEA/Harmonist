@@ -1,0 +1,16 @@
+{
+"concept_title":"",
+"selectConcept":"",
+"concept_id":"",
+"contact1_email":"test@test.com",
+"contact2_email":"",
+"contact3_email":"",
+"pi":"",
+"email":"",
+"tablefields":
+                {
+             
+                "tblBAS":["PATIENT","PROGRAM","BIRTH_D","ENROL_D"]
+
+              }
+}

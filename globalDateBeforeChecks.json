@@ -1,0 +1,11 @@
+{
+  "BIRTH_D": 
+    {"table":"tblBAS", 
+      "id": "PATIENT",
+      "sign":"before",
+      "exceptions": [
+        "FATHERDEATH_D"
+        ],
+      "specialExceptions":null
+    }
+}

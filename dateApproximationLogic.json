@@ -1,0 +1,42 @@
+{
+"1":
+  {
+    "first_A": ["After the date","Exact to the date", "NA", "Variable not included in dataset"],
+    "second_A": ["Before this date","Exact to the date", "NA", "Variable not included in dataset"],
+    "yearCheck": false,
+    "monthCheck": false,
+    "severity": "Error"
+  } ,
+  "2":
+  {
+    "first_A": ["Exact to the year"],
+    "second_A": ["Before this date","Exact to the date","Exact to the month","Exact to the year", "NA", "Variable not included in dataset"],
+    "yearCheck": true,
+    "monthCheck": false,
+    "severity": "Error"
+  },
+  "3":
+  {
+    "first_A": ["After the date","Exact to the date","Exact to the month", "NA", "Variable not included in dataset"],
+    "second_A": ["Exact to the year"],
+    "yearCheck": true,
+    "monthCheck": false,
+    "severity": "Error"
+  },
+  "4":{
+    "first_A": ["Exact to the month"],
+    "second_A": ["Before this date","Exact to the date", "NA", "Variable not included in dataset"],
+    "yearCheck": true,
+    "monthCheck": false,
+    "severity": "Error"
+  },
+  "5":{
+    "first_A": ["After the date","Exact to the date","Exact to the month", "NA", "Variable not included in dataset"],
+    "second_A": ["Exact to the month"],
+    "yearCheck": true,
+    "monthCheck": true,
+    "severity": "Error"
+  }
+}
+ 
+  

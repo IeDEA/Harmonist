@@ -1,0 +1,8 @@
+.Rproj.user
+awsKey.R
+*.csv
+*.Rdata
+*.png
+redcapTokens.R
+server_name.R
+

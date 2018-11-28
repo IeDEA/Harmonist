@@ -1,0 +1,376 @@
+---
+header-includes:
+  - \usepackage{booktabs}
+  - \usepackage{longtable}
+  - \usepackage{array}
+  - \usepackage{multirow}
+  - \usepackage[table]{xcolor}
+output: 
+  pdf_document:
+          fig_width: 6
+          fig_height: 9
+          fig_caption: yes
+params:
+  allTables: "Tables"
+  extraFiles: "extraFiles"
+  tableOfVariables: "tableOfVariables"
+  datasetSummary: "datasetSummary"
+  errorSummary: "errorSummary"
+  highLevel: "highLevel"
+  badCodes: "badCodes"
+  missingSummary: "missingSummary"
+  missingSummaryByProgram: "missingSummaryByProgram"
+  unknownCodeSummaryByProgram: "unknownCodeSummaryByProgram"
+  appearanceSummary: "appearanceSummary"
+  errorTable: "errorTable"
+  datasetDesc: "datasetDesc"
+  plotList: "plotList"
+  includeDataSummary: "includeDataSummary"
+  includeHistograms: "includeHistograms"
+  includeErrorSummary: "includeErrorSummary"
+  region: "region"
+  userDetails: "userDetails"
+  toReport: "toReport"
+  programsInReport: "programsInReport"
+  reportOutput: "reportOutput"
+  errorSummaryTables: "errorSummaryTables"
+---
+
+
+```{r datasetLabel, echo = FALSE,  message=FALSE, warning=FALSE, results='asis'}
+tableData <- params$allTables
+userDetails <- params$userDetails
+user <- userDetails$user
+region <- params$region 
+userDetails <- params$userDetails
+if (userDetails$uploadconcept_mr == "MR000"){
+  headerMessage <- NULL
+} else headerMessage <- paste0("for Concept ", userDetails$uploadconcept_mr)
+
+```
+\centering
+
+# ![](iedeaLogoSmall.png) Harmonist Data Toolkit Report
+
+Dataset submitted `r headerMessage` from IeDEA Region: `r params$region`
+
+Report date: `r Sys.Date()`
+
+`r params$datasetDesc` 
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = FALSE,
+	message = FALSE,
+	warning = FALSE
+)
+```
+
+
+## Dataset Summary
+
+Total number of patients in dataset : `r params$datasetSummary$totalPatients`
+
+```{r summary2, echo=FALSE,message=FALSE, warning=FALSE, results='asis'}
+sumTables <- params$datasetSummary$tableSummaryKable
+
+```
+
+```{r listOfPrograms, message=FALSE, warning=FALSE, include=FALSE, results='asis'}
+programs <- sort(unique(tableData$tblBAS$PROGRAM))
+numberInProgram <- map_dbl(programs, ~nrow(unique(select(filter(tableData$tblBAS, PROGRAM == .),PATIENT)))) 
+
+programSummary <- data.frame("PROGRAM" = programs, "Patients" = numberInProgram)
+
+appearanceSummary <- params$appearanceSummary
+
+temp <- programSummary
+  for (tableName in unique(appearanceSummary$table)){
+    numberInTable <- appearanceSummary %>% filter(table == tableName) %>% select(PROGRAM, number)
+    names(numberInTable) <- c("PROGRAM",tableName)
+    temp <- left_join(temp, numberInTable, by = "PROGRAM")
+  }
+
+sumProgs <- kable(temp, format = "latex",  caption = "Programs in Dataset",longtable = T, booktabs = T) %>%
+  kable_styling(latex_options = c("repeat_header"))
+  #kable_styling(full_width = FALSE, position = "right", "bordered")
+
+```
+
+
+```{r programSummary, echo=FALSE, message=FALSE, warning=FALSE, results='asis'}
+sumTables
+sumProgs
+
+
+```
+
+```{r summarytable, echo=FALSE, message=FALSE, warning=FALSE, results='asis'}
+sumVars <- kable(params$tableOfVariables, "latex",caption = "Summary of Uploaded IeDEA Tables", longtable = T, booktabs = T) %>% 
+  kable_styling(latex_options = c("striped", "repeat_header"),full_width = F)
+if (length(params$tableOfVariables) == 4){
+  sumVars <- sumVars %>% column_spec(3, width = "25em",border_left = T) %>% column_spec(4, "10em",border_left = T)
+} else sumVars <- sumVars %>% column_spec(3, width = "30em")
+
+sumVars
+
+if (!is_empty(params$extraFiles)){
+  cat("####","Note that the following non-IeDEA files were uploaded but were not included in data quality checks: ", paste(params$extraFiles, collapse = ", "),"\n")
+}
+
+
+```
+
+
+
+```{r function to generate heat map, echo=FALSE, fig.height=5, fig.width=5, message=FALSE, warning=FALSE}
+generateHeatMapStoplightPercent <- function(df, xVar, yVar, titleText=NULL, reverse=FALSE){
+  df$percent[data.table::between(df$percent, 0.0, 0.6, incbounds = FALSE)] <- 1
+  df$percent <- round(df$percent,0)
+  df$percent[is.na(df$percent)] <- 0
+  addColor <- scale_fill_gradient2(low="red", mid = "yellow", high = muted("green", 50, 80), midpoint = 50)
+    if (reverse){
+    addColor <- scale_fill_gradient2(high="red", mid = "yellow", low = muted("green", 50, 80), midpoint = 50, na.value = muted("green", 50, 80))
+  } 
+  
+  if (!reverse & all(df$percent>95)){
+    addColor <- scale_fill_gradient2(low=muted("green", 50, 80), 
+                                     mid = muted("green", 50, 80), 
+                                     high = muted("green", 50, 80), midpoint = 50)
+  }
+  if (reverse & all(df$percent < 5)){
+    addColor <- scale_fill_gradient2(low=muted("green", 50, 80), 
+                                     mid = muted("green", 50, 80), 
+                                     high = muted("green", 50, 80), midpoint = 50)
+  }
+ 
+  p <- ggplot(data = df, aes_string(x = xVar, y = yVar)) +
+  geom_tile(aes(fill = percent)) + 
+     geom_text(aes(label = percent), size = 3) +
+    # geom_text(aes(label = round(percent, 0), size = 3)) + 
+    # 
+    # geom_text(data = df %>% filter(is.na(percent)),
+    #           label = "0", size = 3) +
+  addColor + 
+  labs(title=titleText) +
+  theme(axis.text.x=element_text(angle=45, vjust = 0.5, hjust = 0.5, size=9),
+   axis.text.y = element_text(size=9))
+  
+  return(list(
+    p = p,
+    width = 2.2 + 0.5 * uniqueN(df[[xVar]]),
+    height = 1.5 + 0.5 * uniqueN(df[[yVar]]))
+  )
+}
+
+setFakeFigureDim <- function(){
+  df <- NULL
+  df$height <- 1
+  df$width <- 1
+  df$p <- NULL
+ 
+  return(df)
+}
+```
+
+```{r appearanceBarPlotFunction, echo=FALSE, message=FALSE, warning=FALSE, results='asis'}
+
+createAppearanceBarPlot <- function(df){
+  tableName <- unique(df$table)
+  df <-  df %>% select(-table)
+  p <- ggplot(data = df, 
+              aes(x= reorder(PROGRAM,-percent), y=percent, fill=percent)) + 
+    geom_bar(stat = "identity") + 
+    theme(legend.position="none",axis.text.x=element_text(size = 9), axis.text.y=element_text(size = 9)) + 
+    xlab("PROGRAM") +
+    ylab(paste0("percent from tblBAS included in ", tableName)) +
+    coord_flip()
+  width = 6
+  height = 0.5 + 0.5 * uniqueN(df[["PROGRAM"]])
+  return(list(
+    p = p,
+    width = width,
+    height = height)
+  )
+}
+```
+
+
+```{r appearanceHeatmap, echo=FALSE, fig.height=5, fig.width=5.5, fig.cap="Percent of patients from tblBAS included", message=FALSE, warning=FALSE, results='asis'}
+
+# if tblBAS was the only table shared, don't create a heatmap
+if (length(names(tableData)) == 1) {
+  appearanceHeatmap <- setFakeFigureDim()
+} else {
+  # at least one table was shared in addition to tblBAS
+  df <- params$appearanceSummary
+  df <- complete(df, PROGRAM, table)
+  # if only one additional table was shared, create a bar plot instead of heat map
+  if (length(unique(df$table)) == 1){
+   appearanceHeatmap <- createAppearanceBarPlot(df)
+  } 
+  if (length(unique(df$table)) > 1) {
+    appearanceHeatmap <- generateHeatMapStoplightPercent(df, "table","PROGRAM")
+  }
+}
+
+```
+
+```{r statsSummary, echo=FALSE, results='asis'}
+if (params$includeDataSummary){
+  if (!is.null(params$datasetSummary$statsSummaryTable)){
+    print(params$datasetSummary$statsSummaryTable)
+  }
+  print(params$datasetSummary$visitStatsSummaryTable)
+  #print(params$datasetSummary$otherStatsTable)
+}
+
+```
+
+
+
+```{r calcHistHeight, echo = FALSE, message=FALSE, warning= FALSE, results='asis'}
+if (params$includeHistograms){
+  cat("## Histograms of important dates by PROGRAM  ")
+  numberOfGraphs <- length(levels(params$plotList[[1]]$data$DateName))
+  if (numberOfGraphs == 1){
+    histHeight <- 2.44
+  }
+  else if (numberOfGraphs == 6){
+    histHeight <- 4.35
+  } else histHeight <- numberOfGraphs*0.57 + 1.425
+} else histHeight <- 1 #dummy value since histograms not included
+
+```
+
+```{r PlotDates, echo=FALSE, fig.height=histHeight, fig.width=6, message=FALSE, warning=FALSE, fig.cap="Histograms of important dates", results='asis'}
+
+if (params$includeHistograms){
+  
+  for (programName in names(params$plotList)){
+    print(params$plotList[[programName]])
+  }
+}
+
+```
+
+\newpage
+
+\pagebreak
+
+```{r kable, echo=FALSE, message=FALSE, warning=FALSE, results='asis'}
+if (params$includeErrorSummary){
+  cat("## Data Quality Summary  ")
+    cat("\n")
+
+  highLevelSummary <- params$highLevel
+  if (nrow(highLevelSummary) >0 ){
+    highLevel <-  "Note: Download Error Detail spreadsheet from Step 2 for more information"
+    # cat("Note: download Error Detail spreadsheet for more information","  ")
+    # cat("\n")
+    # highLevel <- kable(highLevelSummary, row.names = FALSE, caption = "Error/Warning Overview",
+    #     longtable = TRUE, booktabs = T,
+    #     col.names = c("Error Code","Count"),
+    #     format = "latex") %>%  kable_styling(latex_options = c("repeat_header"))
+  } else highLevel <- "No errors in dataset"
+  cat("\n")
+  cat(highLevel, "  ")
+  
+  if (nrow(params$errorTable$errorOnlySummary) > 0){
+    # errorSummary <- kable(params$errorTable$errorOnlySummary, row.names = FALSE, caption = "Error Summary",
+    #     longtable = TRUE, booktabs = T,
+    #     format = "latex") %>%  kable_styling(latex_options = c("repeat_header"))
+    print(params$errorSummaryTables$errors)
+  }
+  
+  if (nrow(params$errorTable$warnOnlySummary) > 0){
+       # warnSummary <- kable(params$errorTable$warnOnlySummary, row.names = FALSE, caption = "Warning Summary",
+       #   longtable = TRUE, booktabs = T,
+       #   format = "latex") %>%  kable_styling(latex_options = c("repeat_header"))
+
+  print(params$errorSummaryTables$warnings)
+  }
+}
+```
+
+
+``` {r invalidCodes, results= 'asis', echo=FALSE}
+if (params$includeErrorSummary){
+  if (nrow(params$badCodes)== 0){
+    cat("All coded variables had valid codes")
+  } else {
+    # kable(params$badCodes, row.names = FALSE, caption = "Summary of Invalid Codes",
+    #     longtable = TRUE, booktabs = T,
+    #     format = "latex",
+    #     col.names = c("Table","Coded Variable", "Invalid Code", "Count", "Percent")) %>%  kable_styling(latex_options = c("repeat_header"))
+    print(params$errorSummaryTables$badCodes)
+  }
+}
+```
+
+``` {r missing, results= 'asis', echo=FALSE}
+
+if (params$includeErrorSummary & (nrow(params$missingSummary)>0)){
+  missingSummary <- params$missingSummary %>% select(-category)
+    kable(missingSummary, row.names = FALSE, caption = "Summary of Important Missing Variable Entries",
+          longtable = TRUE, booktabs = T,
+        format = "latex") %>% kable_styling(latex_options = c("repeat_header"))
+   
+          #, col.names = c("Table","Variable Name","# of Missing Values","% of Table with Missing Values" ))
+}
+
+
+
+```
+
+
+```{r PlotMissing, echo=FALSE, fig.height=5, fig.width=7, message=FALSE, warning=FALSE, results='asis'}
+# if (params$includeErrorSummary &
+#     (nrow(params$missingSummary) > 0)) {
+#     cat("### Summary of Missing Variables by PROGRAM")
+#     cat("\n")
+#     df <- params$missingSummaryByProgram
+#     df <- df %>% filter(!is.na(PROGRAM))
+#     dfTest <- complete(df, PROGRAM, variable)
+# 
+#     p <- generateHeatMapStoplightPercent(dfTest, "variable", "PROGRAM", titleText="Percent Missing Variable Entries", TRUE)
+    # ggplot(data = params$missingSummaryByProgram, aes(x = PROGRAM, y = variable)) + geom_tile(aes(fill = percent)) +
+    #   scale_fill_gradient(low = "white", high = "red") + labs(title = "Percent Missing Variable Entries", x = sortBy) +
+    #   theme(axis.text.x = element_text(angle = 90, vjust = 0.5))
+    # #ggplotly(p)
+  #  p
+#}
+```
+
+```{r createMissingAndUnknownPlot, echo=FALSE, message=FALSE, warning=FALSE, results='asis'}
+if (params$includeErrorSummary &
+    (nrow(params$errorTable$missingAndUnknownByProgram) > 0)) {
+    cat("\n")
+
+    dataset <- params$errorTable$missingAndUnknownByProgram %>% filter(!endsWith(variable,"D_A")) 
+    df <- dataset
+    df <- df %>% filter(!is.na(PROGRAM))
+    df <- complete(df, PROGRAM, variable)
+    missingAndUnknownHeatmap <- generateHeatMapStoplightPercent(df, "variable", "PROGRAM", " ", TRUE)
+   
+} else  {
+
+  missingAndUnknownHeatmap <- setFakeFigureDim()
+ 
+}
+```
+
+```{r showAppearanceHeatmap, echo=FALSE, fig.height=appearanceHeatmap$height, fig.width=appearanceHeatmap$width, fig.cap="Percent of patients from tblBAS included", message=FALSE, warning=FALSE, results='asis'}
+if (length(names(tableData))>1){
+  print(appearanceHeatmap$p)
+}
+
+```
+
+```{r showMissingAndUnknown, echo=FALSE, fig.height=missingAndUnknownHeatmap$height, fig.width=missingAndUnknownHeatmap$width, fig.cap = "Percent Missing/Unknown Variable Entries", message=FALSE, warning=FALSE, results='asis'}
+if (!is.null(missingAndUnknownHeatmap$p))
+ missingAndUnknownHeatmap$p
+```
+
+

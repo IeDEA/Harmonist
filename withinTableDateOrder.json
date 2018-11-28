@@ -1,0 +1,8 @@
+{
+  "tblART": ["ART_SD","ART_ED"],
+  "tblART_MUM": ["ART_SD","ART_ED"],
+  "tblCENTER": ["OPEN_D","CLOSE_D"],
+  "tblDIS":    ["DIS_D","DIS_ED"],
+  "tblMED":    ["MED_SD","MED_ED"],
+  "tblNEWBORN":["BRFEED_SD","BRFEED_ED"]
+}

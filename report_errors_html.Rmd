@@ -1,0 +1,94 @@
+---
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+params:
+  errorSummary: "errorSummary"
+  badCodes: "badCodes"
+  missingSummary: "missingSummary"
+  missingAndUnknown: "missingAndUnknown"
+  errorsByTable: "ErrorsByTable" 
+  region: "region"
+  userDetails: "userDetails"
+---
+
+
+```{r, echo=FALSE, out.width='20%', fig.align='center'}
+knitr::include_graphics("iedeaLogoSmall.png")
+```
+
+# Harmonist Data Quality Report: Error Detail by Table
+
+Dataset submitted on `r Sys.Date()`  
+
+IeDEA Region: `r params$region`    
+
+## Tables shared
+```{r createBullets, results='asis', echo=FALSE}
+
+  listOfTableNames <- lapply(names(params$errorsByTable), function(x){
+    return(tags$li(x))
+  })
+  
+  htmltools::tagList(tags$ul(listOfTableNames))
+
+```
+
+## Error Summary
+
+```{r errorSummary, results='asis', echo=FALSE}
+DT::datatable(params$errorSummary, rownames = FALSE)
+
+output <- NULL
+
+if (nrow(params$badCodes)>0){
+  output[[1]] <- h2("Invalid Code Summary")
+  output[[2]] <- DT::datatable(params$badCodes, rownames = FALSE)
+}
+
+if (nrow(params$missingSummary) >0){
+  output[[3]] <- h2("Missing Summary")
+  output[[4]] <- DT::datatable(params$missingSummary)
+}
+
+if (nrow(params$missingAndUnknown) >0){
+  output[[3]] <- h2("Missing and Unknown Summary")
+  output[[4]] <- DT::datatable(params$missingAndUnknown)
+}
+
+htmltools::tagList(output)
+```
+
+# Error Detail by Table
+
+```{r showErrorTables, echo=FALSE, results='asis'}
+
+errorsByTable <- params$errorsByTable
+
+# listOfTables <- lapply(names(errorsByTable), function(x){
+#   errorsInThisTable <- get(x,errorsByTable)
+#   return(tagList(
+#      h2(x),
+#      datatable(errorsInThisTable, rownames = FALSE, width = NULL, height = NULL)))
+# })
+# 
+# htmltools::tagList(listOfTables)
+
+
+htmlContent <- NULL
+counter <- 1
+for (tableName in names(errorsByTable)){
+  errorsInThisTable <- get(tableName,errorsByTable)
+  if (nrow(errorsInThisTable)> 0){
+  htmlContent[[counter]] <- tags$h2(tableName)
+  htmlContent[[counter+1]] <- DT::datatable(errorsInThisTable, rownames = FALSE, 
+                                            options = list(scrollY = '450px', scrollX = TRUE))
+  htmlContent[[counter+2]] <- tags$hr()
+  htmlContent[[counter+3]] <- tags$hr()
+  counter <- counter +4}
+}
+
+htmltools::tagList(htmlContent)
+        
+```

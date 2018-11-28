@@ -1,0 +1,26 @@
+{
+  "GENDER":
+  {
+    "type": "factor",
+    "table":"tblBAS",
+    "displayName": "Sex"
+  },
+  "DEATH_Y":
+  {
+    "type": "factor",
+    "table": "tblLTFU",
+    "displayName": "Deceased"
+  },
+  "NAIVE_Y":
+  {
+    "type": "factor",
+    "table": "tblBAS",
+    "displayName": "Treatment Naive at Enrollment"
+  },
+  "RECART_Y":
+  {
+    "type": "factor",
+    "table": "tblBAS",
+    "displayName": "Receive Antiretroviral Therapy (ART)"
+  }
+}
