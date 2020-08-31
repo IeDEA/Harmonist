@@ -11,7 +11,6 @@ output$reportErrors <- downloadHandler(
                                              stringsAsFactors = FALSE
                                            ))
     errors <- errorTable()$errorDetail
-
     if (input$separateTables) {
       tableNames <- unique(errors$table)
       csv_filenames <- c()
@@ -61,7 +60,7 @@ output$reportErrors <- downloadHandler(
 )
 
 output$reportZipAllErrors <-  downloadHandler(
-  filename = "errorDetailAllPrograms.zip",
+  filename = "errorDetailAllGroups.zip",
   content = function(file) {
     reportMessage()
     trackDetailsForREDCap$reports <- rbind(trackDetailsForREDCap$reports,
@@ -73,48 +72,51 @@ output$reportZipAllErrors <-  downloadHandler(
                                              stringsAsFactors = FALSE
                                            ))
     errors <- errorTable()$errorDetail
-    programNames <- unique(na.omit(errors$PROGRAM))
+    groupVar <- finalGroupChoice()
+    groupNames <- unique(na.omit(errors[[groupVar]]))
     tableNames <- as.character(unique(errors$table))
     parent_dir <- tempfile("error")
     dir.create(parent_dir)
     if (input$separateTables) {
-      for (programName in programNames) {
-        cleanProgramName <- sanitizeNames(programName)
+      for (groupName in groupNames) {
+        cleanGroupName <- sanitizeNames(groupName)
         csv_filenames <- c()
         # JUDY possibly sanitize program names
-        program_dir <- file.path(parent_dir, cleanProgramName)
-        dir.create(program_dir)
+        print(paste0("groupname=",groupName))
+        group_dir <- file.path(parent_dir, cleanGroupName)
+        print(paste0("about to create new dir, grou_dir=",group_dir))
+        dir.create(group_dir)
         for (tableName in tableNames) {
-          errorsToWrite <- errors %>% filter(PROGRAM == programName & table == tableName)
+          errorsToWrite <- errors %>% filter( (!! rlang::sym(groupVar)) == groupName & table == tableName)
           if (nrow(errorsToWrite) == 0){
             errorsToWrite <- data.frame("Message" = "No errors found")
           } else {
             emptyCols <- sapply(errorsToWrite, function(x) all(x=="", na.rm = TRUE))
             errorsToWrite <- errorsToWrite[!emptyCols]
           }
-          csv_filename <- paste0(cleanProgramName, '_', tableName, '_errorDetail.csv')
+          csv_filename <- paste0(cleanGroupName, '_', tableName, '_errorDetail.csv')
           csv_filenames <- c(csv_filenames, csv_filename)
-          csv_path <- file.path(program_dir, csv_filename)
+          csv_path <- file.path(group_dir, csv_filename)
           write_csv(errorsToWrite, csv_path)
         }
       }
       old_wd <- getwd()
       setwd(parent_dir)
-      zip::zip(file, sanitizeNames(programNames))
+      zip::zip(file, sanitizeNames(groupNames))
       setwd(old_wd)
     } else {
       csv_filenames <- c()
-      for (programName in programNames) {
-        errorsToWrite <- errors %>% filter(PROGRAM == programName)
+      for (groupName in groupNames) {
+        errorsToWrite <- errors %>% filter( (!! rlang::sym(groupVar)) == groupName)
         if (nrow(errorsToWrite) == 0){
           errorsToWrite <- data.frame("Message" = "No errors found")
         } else {
           emptyCols <- sapply(errorsToWrite, function(x) all(x=="", na.rm = TRUE))
           errorsToWrite <- errorsToWrite[!emptyCols]
         }
-        cleanProgramName <- sanitizeNames(programName)
+        cleanGroupName <- sanitizeNames(groupName)
         
-        csv_filename <- paste0(cleanProgramName, '_errorDetail.csv')
+        csv_filename <- paste0(cleanGroupName, '_errorDetail.csv')
         csv_filenames <- c(csv_filenames, csv_filename)
         csv_path <- file.path(parent_dir, csv_filename)
         write_csv(errorsToWrite, csv_path)
@@ -131,18 +133,18 @@ output$reportZipAllErrors <-  downloadHandler(
   }
 )
 
-
 output$reportOneProgramErrors <- downloadHandler(
   filename = function() {paste0(sanitizeNames(input$programsInErrorCSV), "_errorDetail.zip") },
   content = function(file) {
     reportMessage()
     errors <- errorTable()$errorDetail
-    programName <- input$programsInErrorCSV
+    groupVar <- finalGroupChoice()
+    groupName <- input$programsInErrorCSV
     trackDetailsForREDCap$reports <- rbind(trackDetailsForREDCap$reports,
                                            data.frame(
                                              action_ts = as.character(Sys.time()),
                                              action_step = "downloadreport",
-                                             report_type = paste0("errorDetail",sanitizeNames(programName)),
+                                             report_type = paste0("errorDetail",sanitizeNames(groupName)),
                                              report_format = "csv",
                                              stringsAsFactors = FALSE
                                            ))
@@ -154,14 +156,14 @@ output$reportOneProgramErrors <- downloadHandler(
       dir <- tempfile("error")
       dir.create(dir)
       for (tableName in tableNames) {
-        errorsToWrite <- errors %>% filter(PROGRAM == programName & table == tableName)
+        errorsToWrite <- errors %>% filter( (!! rlang::sym(groupVar)) == groupName & table == tableName)
         if (nrow(errorsToWrite) == 0){
           errorsToWrite <- data.frame("Message" = "No errors found")
         } else {
           emptyCols <- sapply(errorsToWrite, function(x) all(x=="", na.rm = TRUE))
           errorsToWrite <- errorsToWrite[!emptyCols]
         }
-        csv_filename <- paste0(sanitizeNames(programName), '_', tableName, '_errorDetail.csv')
+        csv_filename <- paste0(sanitizeNames(groupName), '_', tableName, '_errorDetail.csv')
         csv_filenames <- c(csv_filenames, csv_filename)
         csv_path <- file.path(dir, csv_filename)
         write_csv(errorsToWrite, csv_path)
@@ -173,7 +175,7 @@ output$reportOneProgramErrors <- downloadHandler(
       setwd(old_wd)
       unlink(dir, recursive = TRUE)
     } else {
-      errorsToWrite <- errors %>% filter(PROGRAM == programName)
+      errorsToWrite <- errors %>% filter( (!! rlang::sym(groupVar)) == groupName)
       if (nrow(errorsToWrite) == 0){
         errorsToWrite <- data.frame("Message" = "No errors found")
       } else {

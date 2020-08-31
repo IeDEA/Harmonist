@@ -4,8 +4,9 @@
       "id": "PATIENT",
       "sign":"before",
       "exceptions": [
-        "FATHERDEATH_D"
-        ],
+        "FATHERDEATH_D",
+        "MUMART_SD",
+        "MUMART_ED"],
       "specialExceptions":null
     }
 }

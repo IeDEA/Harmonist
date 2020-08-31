@@ -1,37 +1,13 @@
 
-initializeErrorTable <- function(){
-  return(list())
-  }
-
-initializeMissingErrors <- function() {
-  return(list())
-}
-
-initializeUnknownCodes <- function() {
- return(list())
-}
-
-initializeSummaryFrame <- function(){
-  return(list())
-}
-
-initializeSummaryFrameByProgram <- function(){
-  return(list())
-}
-
-initializeCodeErrorSummaryFrame <- function(){
-  return(list())
-}
-
-
-initializeAppearanceSummary <- function(programNames,tableNames){
+initializeAppearanceSummary <- function(groupVar, programNames,tableNames){
   rows <- length(programNames)* length(tableNames)
   x <- data.frame(
-    "PROGRAM" = character(rows),
+    "GROUP" = character(rows),
     "table" = character(rows),
     "number" = numeric(rows),
     "percent" = numeric(rows),
     stringsAsFactors = FALSE)
+  names(x)[[1]] <- groupVar
   return(x)
 }
 

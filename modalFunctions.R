@@ -1,30 +1,44 @@
-updateModal <- function(message, n=0, lastMessages=NULL){
+updateModal <- function(message, n=0, lastMessages=NULL,
+                        title = "Data Quality Checks",
+                        subtitle = "The toolkit is checking your dataset.",
+                        currentTableName = NULL){
+  # the service function will give Shiny a place to tell a new user that the
+  # application is busy (appBusy is TRUE during checks)
+  if (appBusy){
+    # httpuv::service(1)
+  }
+  
   lastActivity(Sys.time())
+  cat("Session:", sessionID(),"updateModal:",  unlist(message), "time =",
+      as.character(now()), "\n", sep = " ", file = stderr())
   gc()
   if (!is.null(lastMessages)){
-    checkList <- lapply(lastMessages,function(x){return(div(icon("check"),span(x, style = "color: green; font-size: large")))})
+    checkList <- lapply(lastMessages,
+                        function(x){return(div(icon("check"),span(x, style = "font-size: large")))})
   }
   else checkList <- NULL
   
-  if (n!=0){
-    currentMessage <- paste0(message, " (Quality check #",n, " of 16)")
-  } else currentMessage <- message
-  print(paste0("Check: ", message, " ",Sys.time()))
-  showModal(modalDialog(easyClose = FALSE,
-                        title = "Progress", size = 'l',
-                        wellPanel(
-                          div(tagList(checkList)),
-                          #div(icon("check"),
-                          #    span(lastMessages, style = "color: green; font-size: x-large")),
-                          # div(tags$img(src = "ajax-loader.gif"),
-                          #     span(paste0(message," Quality check ",n, " of 15"), style = "color: blue; font-size: x-large")
-                          div(    icon("spinner", class = "fa-spin"),
-                              span(currentMessage, style = "color: blue; font-size: large")
-                          )
-                        ),
-                        footer = NULL, 
-                        fade = FALSE))
+  if (!is.null(currentTableName)) tableMessage <- tags$p("    Checking table", currentTableName)
+  else tableMessage <- NULL
   
+  if (n!=0){
+    additionalMessage <- tags$em("(Quality check #",n, " of 17)")
+  } else additionalMessage <- NULL
+  print(paste0("Check: ", message, " ",Sys.time()))
+  showModal(tags$div(id="dataQualityChecks",modalDialog(
+    easyClose = FALSE,
+    title = title, size = 'l',
+    tags$em(subtitle),
+    wellPanel(
+      div(tagList(checkList)),
+      
+      div(    icon("spinner", class = "fa-spin"),
+              span(message, additionalMessage, class = "text-blue", style = "font-size: large")
+      ),
+      tableMessage
+    ),
+    footer = NULL, 
+    fade = FALSE)))
   return(list(num = n+1, lastMessages = c(lastMessages, message)))
 }
 
@@ -32,77 +46,53 @@ reportModal <- function(titleText = "Report generation",
                         message = "The requested report is being generated...",
                         tableMessage = NULL,
                         programMessage = NULL){
-  showModal(modalDialog(easyClose = TRUE, #JUDY change back to false
-                        title = titleText, size = 'l',
-                        div(    icon("spinner", class = "fa-spin"),
-                            span(message, style = "color: blue; font-size: x-large")
-                        ),
-                        tableMessage,
-                        programMessage,
-                        footer = NULL, 
-                        fade = FALSE))
+  showModal(tags$div(id="dataQualityChecks",
+                     modalDialog(
+                       easyClose = FALSE,
+                       title = titleText, size = 'm',
+                       div(    icon("spinner", class = "fa-spin"),
+                               span(message, class = "text-blue")
+                       ),
+                       tableMessage,
+                       programMessage,
+                     #  footer = NULL, 
+                       fade = FALSE))
+  )
 }
 
 
 errorMessageModal <- function(messageHeader = "",message = "", textForREDCap = "", messageTable = NULL,
                               secondaryMessage = "Please upload corrected dataset"){
   lastActivity(Sys.time())
-
+  cat("Session:", isolate(sessionID())," error Message: ",
+      messageHeader, unlist(message), textForREDCap,
+      sep = " ",
+      "\n", file = stderr())  
+  
   if (textForREDCap == ""){
     errormsg <- messageHeader
   } else errormsg <- textForREDCap
   postProgress(list(action_step = "errormsg", errormsg = errormsg))
-  showModal(modalDialog(easyClose = FALSE,
-                        title = span(icon("danger"),"Error"),
-                        wellPanel(
-                          tags$h3(messageHeader),
-                          tags$p(message),
-                          tags$br(),
-                          renderTable({
-                            messageTable
-                          },
-                          rownames = TRUE
-                          )
-                        ),
-                        tags$h4(secondaryMessage),
-                        footer = actionButton("close_error_modal", label = "Close", class = "color_btn"), 
-                        fade = FALSE))
+  showModal(
+    tags$div(id="errorModal",(
+      modalDialog(
+        easyClose = FALSE,
+        title = span(icon("exclamation-triangle"),"Error"),
+        wellPanel(
+          tags$h3(messageHeader),
+          tags$p(message),
+          tags$br(),
+          renderTable({
+            messageTable
+          },
+          rownames = FALSE,
+          sanitize.text.function = function(x) x #this allows escape html in renderTable
+          )
+        ),
+        tags$h4(secondaryMessage),
+        footer = actionButton("close_error_modal", label = "Close", class = "color_btn"), 
+        fade = FALSE))))
 }
-
-uploadMissingRequested <- function(missingList, uploadedList){
-  messageHeader <-  "Requested Tables Not Detected"
-  message <-  tagList(
-    tags$p("The following tables requested by Data Request", userDetails()$uploadconcept_mr,
-           "are missing:"),
-    listOfMissingTables,
-    tags$br(),
-    tags$p("You uploaded the following tables:"),
-    listOfTables
-  )
-  showModal(modalDialog(easyClose = FALSE,
-                        title = span(icon("danger"),"Error"),
-                        wellPanel(
-                          tags$h3(messageHeader),
-                          tags$p(message)
-                        ),
-                        footer = 
-                          tagList(
-                            actionButton("uploadContinue", 
-                                         label = "Log out of Hub and continue with this dataset"),
-                            actionButton("uploadStop", 
-                                         label = paste0("Return to active data request ", mr, 
-                                                        " and upload all requested tables and variables"))
-                            ), 
-                        fade = FALSE))
-}
-
-observeEvent("uploadContinue", {
-  
-})
-
-observeEvent("uploadStop",{
-  
-})
 
 observeEvent(input$close_error_modal, {
   removeModal()
@@ -156,3 +146,6 @@ informNoConcept <- function(mr){
                         ),
                         fade = FALSE))
 }
+
+
+

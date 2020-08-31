@@ -45,38 +45,66 @@ initialExitFunctions <- function(){
 exitButtonClicked <- reactiveVal(FALSE)
 
 
+cleanupFiles <- function(object) {
+  if (is.null(object)) return()
+
+  if (!is.null(object$datapath)) {
+    # object is input$loaded
+    unlink(object$datapath)
+  } else if (!is.null(object$files)) {
+    # object is infile
+    unlink(object$files$datapath)
+    if (!is.null(object$zipfile)) {
+      unlink(object$zipfile)
+    }
+  }
+  usage[[isolate(session$token)]] <<- NULL
+}
 
 exitActions <- function(){
-  resetFileInput$reset <- TRUE
+  reloadGuardOn(FALSE)
+  cat("Session:", sessionID(),"inside exitActions", 
+      as.character(now()), "\n", sep = " ", file = stderr())
+  #resetFileInput$reset <- TRUE
+
   lapply(isolate(reactiveValuesToList(trackDetailsForREDCap)), postProgressMultiple)
-  postProgress(list(action_step = "errordetail", viewdetail_count = isolate(errorDetailViewCount())))
-  postProgress(list(action_step = "logout"))
+  #postProgress(list(action_step = "errordetail", viewdetail_count = isolate(errorDetailViewCount())))
+  cat("Session:", sessionID(),"inside exitActions, about to add logout step to redcap", 
+      as.character(now()), "\n", sep = " ", file = stderr())
+  sessionDuration <- round(difftime(isolate(lastActivity()), isolate(sessionStartTime()), units = "mins"), digits = 1)
+  postProgress(list(action_step = "logout", session_mins = as.character(sessionDuration)))
+  cat("Session:", sessionID(),"inside exitActions, finished adding logout step to redcap", 
+      as.character(now()), "\n", sep = " ", file = stderr())
+  cat("Session:", sessionID(),"about to clean up files", 
+      as.character(now()), "\n", sep = " ", file = stderr())
+  cleanupFiles(isolate(infile()))
+  cat("Session:", sessionID(),"about to reload session from exitActions", 
+      as.character(now()), "\n", sep = " ", file = stderr())
+
   if (hubInfo$fromHub){
-    # delete record from Harmonist 18
-   # browser()
-   # deleteOneRecord(tokenForHarmonist18, userDetails()$decryptedToken)
     hubInfo$fromHub <- FALSE
-    session$reload()
   }
-  else {
-    session$reload()
-    
-    gc()
-    # session$close()
-  }
+  cat("reloadGuard:", isolate(reloadGuardOn()), "\n")
+  session$reload()
+  session$close()
+  sessionOver(TRUE)
 }
 
 observeEvent(input$exitNoRequest,{
   removeModal()
   exitButtonClicked(TRUE)
-  
+  cat("Session:", sessionID(),"Initiating exitActions because exitnorequest button clicked", 
+      as.character(now()), "\n", sep = " ", file = stderr())
+  reloadGuardOn(FALSE)
   exitActions()
 })
 
 observeEvent(input$exitButton,{
+  reloadGuardOn(FALSE)
   removeModal()
   exitButtonClicked(TRUE)
-  
+  cat("Session:", sessionID(),"Initiating exitActions because exitbutton clicked", 
+      now(), "\n", sep = " ", file = stderr())
   exitActions()
 })
 
@@ -87,7 +115,10 @@ observeEvent(input$idleContinue,{
 })
 
 observeEvent(input$idleExit, {
+  reloadGuardOn(FALSE)
   removeModal()
+  cat("Session:", sessionID(),"Initiating exitActions because exitfromidle button clicked", 
+      as.character(now()), "\n", sep = " ", file = stderr())
   exitActions()
 })
 
@@ -97,16 +128,53 @@ observeEvent(input$continue,{
 })
 
 session$onSessionEnded(function(){
-  if (isolate(exitButtonClicked())) return(NULL)
+  if (isolate(exitButtonClicked())) {
+    cat("Session:", isolate(sessionID()),"inside onSessionEnded although exitButtonClicked. sessionOver:", 
+        isolate(sessionOver()), "\n", sep = " ", file = stderr())
+    cat("Session:", isolate(sessionID()),"inside onSessionEnded reloading session", 
+        as.character(now()), "\n", sep = " ", file = stderr())
+    session$reload()
+    #session$close()
+    return(NULL)
+  }
+  if (isolate(sessionOver())){
+    cat("Session:", isolate(sessionID()),"inside onSessionEnded after idle too long although exitActions already completed. sessionOver:", 
+        isolate(sessionOver()), "\n", sep = " ", file = stderr())
+    cat("Session:", isolate(sessionID()),"inside onSessionEnded reloading session", 
+        as.character(now()), "\n", sep = " ", file = stderr())
+    session$reload()
+    #session$close()
+    return(NULL)
+  }
+  cat("Session:", isolate(sessionID()),"Initiating onSessionEnded", 
+      as.character(now()), "\n", sep = " ", file = stderr())
+  cat("Session:", isolate(sessionID()),"In onSessionEnded about to post details to REDCap", 
+      as.character(now()), "\n", sep = " ", file = stderr())
+  
+  lapply(isolate(reactiveValuesToList(trackDetailsForREDCap)), postProgressMultiple)
+  if (isolate(errorDetailViewCount()) > 0){
+    postProgress(list(action_step = "errordetail", viewdetail_count = isolate(errorDetailViewCount())))
+  }
+  
+  sessionDuration <- round(difftime(isolate(lastActivity()), isolate(sessionStartTime()), units = "mins"), digits = 1)
+  postProgress(list(action_step = "session_end", session_mins = as.character(sessionDuration)))
+
+  cleanupFiles(isolate(infile()))
+  cat("Session:", isolate(sessionID()),"Still in onSessionEnded after cleaning files", 
+      as.character(now()), "\n", sep = " ", file = stderr())
+
   if (is.null(isolate(infile()))){
+    cat("Session:", isolate(sessionID()),"Infile() is null, about to reload session", 
+        as.character(now()), "\n", sep = " ", file = stderr())
     session$reload()  #or not if fromHub
     return(NULL)
   }
-  lapply(isolate(reactiveValuesToList(trackDetailsForREDCap)), postProgressMultiple)
-  postProgress(list(action_step = "errordetail", viewdetail_count = isolate(errorDetailViewCount())))
-  postProgress(list(action_step = "session_end"))
+
   gc()
   resetFileInput$reset <- TRUE
   exitButtonClicked(FALSE)
+  cat("Session:", isolate(sessionID()),"At end of onSessionEnded", 
+      as.character(now()), "\n", sep = " ", file = stderr())
+ # session$reload()
   #session$close()
 })

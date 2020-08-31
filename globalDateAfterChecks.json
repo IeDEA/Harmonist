@@ -7,8 +7,10 @@
                   "NEXT_VISIT_D",
                   "BIRTH_D", 
                   "DROP_D",
-                "FATHERDEATH_D",
-                "MOTHERDEATH_D"
+                  "FATHERDEATH_D",
+                  "MOTHERDEATH_D",
+                  "MUMART_SD",
+                  "MUMART_ED"
                 ],
                   "specialExceptions":null
                 },
@@ -21,8 +23,10 @@
                   "L_ALIVE_D",
                   "BIRTH_D",
                   "DEATH_D",
-                "FATHERDEATH_D",
-                "MOTHERDEATH_D"
+                  "FATHERDEATH_D",
+                  "MOTHERDEATH_D",
+                  "MUMART_SD",
+                  "MUMART_ED"
                 ],
                  "specialExceptions":null
 
@@ -37,7 +41,9 @@
                   "DEATH_D",
                   "FATHERDEATH_D",
                   "MOTHERDEATH_D",
-					        "DROP_D"
+					        "DROP_D",
+					        "MUMART_SD",
+					        "MUMART_ED"
                 ],
                  "specialExceptions":null
                 }

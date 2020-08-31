@@ -1,4 +1,3 @@
-
 {
 "tblBAS":	["PATIENT"],
 "tblART":	["PATIENT",	"ART_ID",	"ART_SD"],
@@ -26,4 +25,3 @@
 "tblVIS":	["PATIENT","VIS_D"],		
 "tblOVERLAP":	["PATIENT"]
 }
-

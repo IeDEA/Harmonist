@@ -1,5 +1,5 @@
 {
-  "GENDER":
+  "SEX":
   {
     "type": "factor",
     "table":"tblBAS",

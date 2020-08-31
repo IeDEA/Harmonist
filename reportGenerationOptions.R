@@ -1,51 +1,94 @@
+finalGroupLevels <- reactive({
+  if (is.null(uploadedTables())) return(NULL)
+  groupVar <- finalGroupChoice()
+  
+  groupNames <- as.character(sort(tableRowsByGroup()$tblBAS[[groupVar]]))
+  groupNames <- groupNames[groupNames != "Missing"]
+  names(groupNames) <- groupNames
+  return(groupNames)
+})
 
 # determine if user prefers one program in report or all---------------------------------------------------------  
 output$programsToInclude <- renderUI({
   if (is.null(uploadedTables())) return(NULL)
-  tblBAS <- formattedTables()$tblBAS
-  programNames <- as.character(sort(unique(tblBAS$PROGRAM)))
-  names(programNames) <- programNames
-  
-  if (length(programNames)==1){
-    availChoices = programNames
+  groupVar <- finalGroupChoice()
+  groupNames <- finalGroupLevels()
+  if (length(groupNames)==1){
+    availChoices = groupNames
   }
-  else availChoices =  c(
-    "All Programs" = "all",
-    "Generate individual reports for each Program, zipped into one output file" = "allZip",
-    programNames
-  ) 
+  else {
+    availChoices <- list(
+      "all",
+      "allZip",
+      groupNames#,
+     # "multigroup"
+    )
+    names(availChoices) <- c(
+      "All" ,
+      paste0("Download individual reports for each ", groupVar, " group zipped into one file"),
+      paste0("Individual report (choose one ", groupVar, " group)" )#,
+    #  paste0("Multiple ", groupVar, " groups in a single report")
+    )
+  }
+    
   selectInput("programsInReport",
-              "Which Program(s) would you like to include in this report?",
+              paste0("Data subgroup(s) for report"),
               choices =  availChoices,
               selected = availChoices[[1]],
               multiple = FALSE
   )
 })
 
+# output$chooseMultipleGroups <- renderUI({
+#   if (is.null(uploadedTables())) return(NULL)
+#   if (is.null(input$programsInReport)) return(NULL)
+#   if (input$programsInReport != "multigroup") return(NULL)
+#   if (is.null(input$multGroupsInReport)){
+#     label <- "Choose groups"
+#   } else {
+#     label <- "Edit groups"
+#   }
+#   actionButton("chooseMultiGroups", label)
+#   
+# })
+
 createSelectProgramUI <- function(selectInputName){
-  programNames <- as.character(sort(unique(errorTable()$errorDetail$PROGRAM)))
-  names(programNames) <- programNames
-  allPrograms <- unique(na.omit(uploadedTables()$tblBAS$PROGRAM))
-  if (length(allPrograms) > length(programNames)){
-    errorFreePrograms <- setdiff(allPrograms, programNames)
-    note <- tags$h5("Note that the following program(s) in the dataset had no errors: ",
-                    paste(errorFreePrograms, collapse = ", "))
+  groupVar <- finalGroupChoice()
+  groupNames <- as.character(sort(unique(errorTable()$errorDetail[[groupVar]])))
+  # for now, remove "All" from program names in choose program UI since these are general errors
+  # that should only be included in All Programs report **May want to change this later** JUDY
+  groupNames <- groupNames[groupNames != "All"]
+  names(groupNames) <- groupNames
+  allGroups <- unique(na.omit(uploadedTables()$tblBAS[[groupVar]]))
+  allGroups <- allGroups[!is_blank_or_NA_elements(allGroups)]
+  if (length(allGroups) > length(groupNames)){
+    errorFreeGroups <- setdiff(allGroups, groupNames)
+    note <- tags$h5("Note that the following",
+                    makeItPluralOrNot("group", length(errorFreeGroups)),
+                    "in the dataset had no errors: ",
+                    paste(errorFreeGroups, collapse = ", "))
   } else {note <-  NULL}
   
-  if (length(programNames) == 1) {
-    chooseProgram <- selectInput("programsInErrorCSV",
-                                 paste0("Errors from Program ", programNames, " will be included in this report"),
-                                 choices =  programNames,
-                                 selected = programNames
+  if (length(groupNames) == 1) {
+    chooseGroup <- selectInput(selectInputName,
+                                 tags$p("Errors from", groupVar, "group", tags$b(groupNames), "will be included in this report"),
+                                 choices =  groupNames,
+                                 selected = groupNames
     )
   } else {
-    programChoices <- c(
-      "All Programs" = "all",
-      "Download individual error reports for each program, zipped into one file" = "allZip",
-      programNames
+    programChoices <- list(
+      "all",
+      "allZip",
+      groupNames
     )
-    chooseProgram <- selectInput(selectInputName,
-                                 "Which Program(s) would you like to include in this report?",
+    names(programChoices) <- c(
+      "All" ,
+      paste0("Download individual error reports for each ", groupVar, " group zipped into one file"),
+      paste0("Individual report (choose one ", groupVar, " group)" ) 
+    )
+  
+    chooseGroup <- selectInput(selectInputName,
+                                 paste0("Which ", groupVar, " would you like to include in this report?"),
                                  choices =  programChoices,
                                  selected = "all",
                                  multiple = FALSE
@@ -54,7 +97,7 @@ createSelectProgramUI <- function(selectInputName){
   
   return(
     tagList(
-      chooseProgram,
+      chooseGroup,
       note
     )
   )
@@ -70,38 +113,27 @@ output$programsToIncludeErrorCSV <- renderUI({
   selectProgramUI <- createSelectProgramUI("programsInErrorCSV")
 })
 
-output$programsToIncludeErrorHTML <-renderUI({
-  if (resetFileInput$reset) return(NULL)
-  if (is.null(uploadedTables())) return(NULL)
-  if (nrow(errorTable()$errorDetail) == 0){
-    return(h4("No errors to download"))
-  }
-  selectProgramUI <- createSelectProgramUI("programsInErrorHTML")
-})
-
 output$histOptions<- renderUI({
-  if (resetFileInput$reset) return(NULL)
-  if (is.null(formattedTables())) return(NULL)
+  
   if (input$includeHistograms == FALSE) return(NULL)
-  if (is.null(input$fullOrRange)){
-    fullOrRange <- "fullRange"
-  } else {fullOrRange <- input$fullOrRange}
-  if (is.null(input$factorForHistogram)){
-    factorForHistogram <- "None"
+
+  if (is.null(input$histoRange)){
+    selection <- "defaultRange"
+  } else {
+    selection <- input$histoRange
   }
   
   options <- tagList(
-    selectInput("fullOrRange","Choose years to include in histograms",
-                choices = c("The full range of years of data" = "fullRange",
+    selectInput("histoRange","Choose years to include in histograms",
+                choices = c("Years: 2000 - present" = "defaultRange",
                             "Choose a custom range of years" = "chooseRange"),
-                selected = fullOrRange)
-    
+                selected = selection)
   )
-  if (is.null(input$fullOrRange)){
+  if (is.null(input$histoRange)){
     return(
       box("Date Histogram Options",status = "primary", width = 12, options))
   }
-  if (input$fullOrRange=="chooseRange"){
+  if (input$histoRange=="chooseRange"){
     moreOptions <- options
     moreOptions[["chooseYears"]] <- sliderInput("yearsToPlot",
                                                 "Date range to include in histograms:",
@@ -112,11 +144,39 @@ output$histOptions<- renderUI({
     return(
       box("Date Histogram Options", status = "primary", width = 12, moreOptions))
   }
-  if (input$fullOrRange == "fullRange"){
+  if (input$histoRange == "defaultRange"){
     return(
       box("Date Histogram Options", status = "primary", width = 12, options))
   }
 })
+
+# observeEvent(input$multContinue,{
+#   if (is.null(input$multGroupsInReport))
+#     browser()
+#   removeModal()
+# })
+
+
+# observeEvent(input$chooseMultiGroups,{
+#   if (input$programsInReport != "multigroup") return(NULL)
+#   groupNames <- finalGroupLevels()
+#   showModal(modalDialog(
+#     easyClose = FALSE,
+#     title = paste0("Choose ", finalGroupChoice(), " groups for report"),
+#     
+#     wellPanel(
+#       checkboxGroupInput("multGroupsInReport",
+#                          "Choose the groups you would like to include in this report",
+#                          groupNames)#,
+#       #  multiple = TRUE)
+#     ),
+#     footer = tagList(
+#       #  actionButton("Cancel", label = "Continue working"),
+#       actionButton("multContinue", label = "Continue")
+#     ),
+#     fade = FALSE))
+# })
+
 
 
 # Display download buttons for reports once data quality checks are complete-----
@@ -130,41 +190,40 @@ output$downloadReport <- renderUI({
   if (is.null(input$programsInReport)){
     return(NULL)
   }
+  # if (input$programsInReport == "multigroup" && is.null(input$multGroupsInReport)){
+  #   return(NULL)
+  # }
+
   if (input$reportType == "pdf"){
-    if (input$programsInReport == "all"){
-      return(downloadButton("reportpdf", "Generate summary pdf report"))
+    if (input$programsInReport == "all"){ #%in% c("all", "multigroup")){
+      return(downloadButton("reportpdf", "Generate summary PDF report"))
     }
     else if (input$programsInReport == "allZip"){
-      return(downloadButton("reportZipAll", "Generate ZIP file of individual summary pdf reports"))
+      return(downloadButton("reportZipAll", "Generate ZIP file of individual summary PDF reports"))
       
     }
     else {
-      program <- input$programsInReport
+      groupVar <- finalGroupChoice()
+      group <- input$programsInReport
       return(downloadButton("reportOneProgramPDF", 
-                            paste0("Generate summary pdf report of PROGRAM ", program)))
+                            paste0("Generate summary PDF report for ", groupVar, ": ", group)))
     }
   }
   if (input$reportType == "html"){
     
-    if (input$programsInReport == "all"){
-      return(downloadButton("reporthtml", "Generate summary html report"))
+    if (input$programsInReport == "all"){ # %in% c("all", "multigroup")){
+      return(downloadButton("reporthtml", "Generate summary HTML report"))
     }
     else if (input$programsInReport == "allZip"){
-      return(downloadButton("reportZipAll", "Generate ZIP file of individual summary html reports"))
+      return(downloadButton("reportZipAll", "Generate ZIP file of individual summary HTML reports"))
     }
     else {
-      program <- input$programsInReport
+      groupVar <- finalGroupChoice()
+      group <- input$programsInReport
       return(downloadButton("reportOneProgramHTML", 
-                            paste0("Generate summary HTML report of PROGRAM ", program)))
+                            paste0("Generate summary HTML report for ", groupVar, ": ", group)))
     }
   }
-})
-
-output$downloadErrorHTML <- renderUI({
-  if (is.null(errorTable())) return(NULL)
-  if (nrow(errorTable()$errorDetail) == 0) return(NULL)
-  if (nrow(errorTable()$errorDetail) > maxErrorsForHTML) return(NULL)
-  downloadButton('reportErrorsInHTML', 'Download HTML report of error detail')
 })
 
 

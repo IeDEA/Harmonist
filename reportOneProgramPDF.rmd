@@ -4,7 +4,6 @@ header-includes:
   - \usepackage{longtable}
   - \usepackage{array}
   - \usepackage{multirow}
-  - \usepackage[table]{xcolor}
 output: 
   pdf_document:
     fig_width: 6
@@ -25,28 +24,35 @@ params:
   toReport: "toReport"
   programsInReport: "programsInReport"
   errorSummaryTables: "errorSummaryTables"
+  groupVar: "groupVar"
 ---
   
 ```{r datasetLabel, echo = FALSE,  message=FALSE, warning=FALSE, results='asis'}
 
 tableData <- params$allTables
 program <- params$programsInReport
+groupVar <- params$groupVar
 userDetails <- params$userDetails
 if (userDetails$uploadconcept_mr == "MR000"){
   headerMessage <- NULL
-} else headerMessage <- paste0("for Concept ", userDetails$uploadconcept_mr)
+} else headerMessage <- paste0("Dataset submitted for Concept ", userDetails$uploadconcept_mr)
+
+
+if (userDetails$uploaduser_id == ""){
+  regionMessage <- NULL
+} else regionMessage <- paste0("from IeDEA Region ", params$region)
 ```
 \centering
 
-# ![](iedeaLogoSmall.png) Harmonist Data Toolkit Report for Program: `r program`
+# ![](iedeaLogoSmall.png) Harmonist Data Toolkit Report for `r groupVar` `r program`
 
-Dataset submitted `r headerMessage` from IeDEA Region `r userDetails$regionName`
+`r headerMessage` `r regionMessage`
 
 Report date: `r Sys.Date()`
 
 `r params$datasetDesc`
 
-Total number of patients from Program `r program` in dataset : `r params$datasetSummary$totalPatients`
+Total number of patients from Program `r program` in dataset: `r params$datasetSummary$totalPatients`
 
 
 ```{r setup, include=FALSE}
@@ -76,7 +82,10 @@ if (params$includeDataSummary){
 }
 if (params$includeErrorSummary){
    if (is.null(params$datasetQuality$missingAndUnknownPlot)){
-    cat("No important variables have missing/unknown entries")
+     cat("\n")
+    cat("\n")
+
+    cat("No important variables have missing/unknown entries", "\n")
   } else {
     print(params$datasetQuality$missingAndUnknownPlot)
   }
@@ -86,7 +95,7 @@ if (params$includeErrorSummary){
 
 ```{r calcHistHeight, echo = FALSE, message=FALSE, warning= FALSE, results='asis'}
 if (params$includeHistograms){
-  cat("## Histograms of important dates in PROGRAM  ", Hmisc::latexTranslate(program))
+  cat("## Histograms of important dates in ", groupVar, Hmisc::latexTranslate(program))
   numberOfGraphs <- length(levels(params$p$data$DateName))
   if (numberOfGraphs == 1){
     histHeight <- 2.44
@@ -134,7 +143,8 @@ if (params$includeErrorSummary){
     if (nrow(params$programSummary$missingSummary)>0){
       temp <- kable(params$programSummary$missingSummary, row.names = FALSE,
                     caption = "Summary of Important Missing Variable Entries", format = "latex",
-                    longtable = TRUE, booktabs = TRUE) %>%
+                    longtable = TRUE, booktabs = TRUE, 
+                    col.names = c("Table", "Variable", "Count", "Percent")) %>%
         kable_styling(latex_options = c("repeat_header"))
       cat(temp)
     }

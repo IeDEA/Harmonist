@@ -1,13 +1,13 @@
 output$plotUI <- renderUI({
  
     if (resetFileInput$reset) {
-      return(fluidPage(fluidRow(tags$h3(notReadyMessage))))
+      return(fluidPage(fluidRow(tags$h3(class = "row_text title", notReadyMessage))))
     }
   if (is.null(errorTable())){
-    return(fluidPage(fluidRow(tags$h3(notReadyMessage))))
+    return(fluidPage(fluidRow(tags$h3(class = "row_text title", notReadyMessage))))
   } 
     if (is.null(errorTable()[[1]])){
-      return(fluidPage(fluidRow(tags$h3(notReadyMessage))))
+      return(fluidPage(fluidRow(tags$h3(class = "row_text title", notReadyMessage))))
     } 
   fluidPage(
     tags$h3(class = "row_text title",
@@ -29,7 +29,7 @@ output$plotUI <- renderUI({
 output$chooseTable <- renderUI({
  
     return(selectInput("table2plot", "Select a table to investigate interactively", 
-                       choices = uploadList()$AllDESTables))
+                       choices = tablesAndVariables$tablesToCheck))
   
 })
 
@@ -98,7 +98,7 @@ p <- eventReactive(input$plotButton,{
   dataset <- formattedTables()[[input$table2plot]]
   
   plotOptions <- theme(axis.title.x = element_text(margin = margin(t = -10))) +
-    theme(axis.text.x = element_text(angle = xAxisLabelAngle))
+    theme(axis.text.x = element_text(angle = xAxisLabelAngle)) 
  
   # if first variable is discrete plot a bar chart 
   if (is.factor(get(input$var1, dataset)) || 
@@ -113,7 +113,11 @@ p <- eventReactive(input$plotButton,{
     else {
       p <- ggplot(dataset,
                   aes_string(input$var1, fill= input$var2)) + 
-        geom_bar() + 
+        geom_bar() +
+       # scale_fill_manual(values = getPalette ) +
+      # scale_fill_viridis_d(na.value = "gray50") +
+        scale_fill_brewer(palette = "Paired", na.value = "gray50")
+      
         plotOptions
     }
   }
@@ -129,7 +133,7 @@ p <- eventReactive(input$plotButton,{
     }
     
     if (labWithUnits){
-      datasetToPlot <- dataset %>% filter(.[unitsName] == input$var2) 
+      datasetToPlot <- dataset %>% filter(!!rlang::sym(unitsName) == input$var2) 
       p <- ggplot(datasetToPlot,
                     aes_string(input$var1)) + 
         geom_histogram(fill = "blue") + theme(legend.position = "none") +
@@ -146,7 +150,10 @@ p <- eventReactive(input$plotButton,{
       # var2 (categorical) is specified and is not lab units
       p <- ggplot(dataset,
                   aes_string(input$var1, fill= input$var2)) + 
-        geom_histogram() + plotOptions
+        geom_histogram() + 
+        #scale_fill_viridis_d(na.value = "gray50") +
+        scale_fill_brewer(palette = "Paired", na.value = "gray50")
+        plotOptions
     }
   }
   if (endsWith(input$var1, "_D")){

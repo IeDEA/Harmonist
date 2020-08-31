@@ -12,8 +12,8 @@ params:
   highLevel: "highLevel"
   badCodes: "badCodes"
   missingSummary: "missingSummary"
-  missingSummaryByProgram: "missingSummaryByProgram"
-  unknownCodeSummaryByProgram: "unknownCodeSummaryByProgram"
+  missingSummaryByGroup: "missingSummaryByGroup"
+  unknownCodeSummaryByGroup: "unknownCodeSummaryByGroup"
   appearanceSummary: "appearanceSummary"
   errorTable: "errorTable"
   datasetDesc: "datasetDesc"
@@ -27,28 +27,38 @@ params:
   programsInReport: "programsInReport"
   reportOutput: "reportOutput"
   errorSummaryTables: "errorSummaryTables"
+  groupVar: "groupVar"
 ---
-
 ```{r datasetLabel, echo = FALSE, warning=FALSE}
-
 tableData <- params$allTables
-
-```
-
-```{r, echo=FALSE, fig.align='center', message=FALSE, warning=FALSE, out.width='20%'}
+groupVar <- params$groupVar
+groupVarSE <- rlang::sym(groupVar)
+userDetails <- params$userDetails
+region <- params$region 
 userDetails <- params$userDetails
 if (userDetails$uploadconcept_mr == "MR000"){
   headerMessage <- NULL
-} else headerMessage <- paste0("for Concept ", userDetails$uploadconcept_mr)
+} else headerMessage <- paste0("Dataset submitted for Concept ", userDetails$uploadconcept_mr)
+
+
+if (userDetails$uploaduser_id == ""){
+  regionMessage <- NULL
+} else regionMessage <- paste0("from IeDEA Region ", region)
+
+
+# max number of characters in x label in heat map for labels to be horizontal
+maxNumberOfHeatMapCharX <- 10
+
 ```
+
+
 # `r knitr::include_graphics("iedeaLogoSmall.png")` Harmonist Data Toolkit Report
 
-Dataset submitted `r headerMessage` from IeDEA Region: `r userDetails$regionName`
+`r headerMessage` `r regionMessage`
 
 Report date: `r Sys.Date()`
 
 `r params$datasetDesc` 
-
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(
@@ -58,34 +68,40 @@ knitr::opts_chunk$set(
 )
 ```
 
-## Dataset Summary
+### Dataset Summary
 
-Total number of patients in dataset : `r params$datasetSummary$totalPatients`
+Total number of patients in dataset: `r format(params$datasetSummary$totalPatients, scientific = FALSE, big.mark = ",")`
 
 ```{r summary2, echo=FALSE, fig.align='left', message=FALSE, warning=FALSE, results='asis'}
 sumTables <- params$datasetSummary$tableSummaryKable
 ```
 
 ```{r listOfPrograms, echo=FALSE, message=FALSE, warning=FALSE, results='asis'}
-programs <- sort(unique(tableData$tblBAS$PROGRAM))
-numberInProgram <- map_dbl(programs, ~nrow(unique(select(filter(tableData$tblBAS, PROGRAM == .),PATIENT)))) 
+groups <- sort(unique(tableData$tblBAS[[groupVar]]))
+groups <- groups[groups != "Missing"]
 
-programSummary <- data.frame("ProgramName" = programs, "numberOfPatients" = numberInProgram)
+numberInGroup <- map_dbl(groups, ~nrow(unique(select(filter(tableData$tblBAS, (!! rlang::sym(groupVar)) == .),PATIENT)))) 
 
-sumProgs <- kable(programSummary, col.names = c("Program","Patients"), caption = "Programs in Dataset",longtable = T, format = "html") %>% kable_styling(full_width = FALSE, position = "left", "bordered")
+groupSummary <- data.frame("GroupName" = groups, "Patients" = numberInGroup)
+names(groupSummary)[[1]] <- groupVar
+
+sumGroups <- kable(groupSummary, col.names = c(groupVar,"Patients"), caption = paste0(groupVar, " in Dataset"),longtable = T, format = "html") %>% kable_styling(full_width = FALSE, position = "left", "bordered")
 ```
 
 ```{r attempt, echo=FALSE, message=FALSE, warning=FALSE, results='asis'}
 
 sumTables %>% kable_styling(position = "left") 
 cat("\n")
-sumProgs
+sumGroups
 cat("\n")
 
 ```
 
 ```{r summarytable, echo=FALSE, message=FALSE, warning=FALSE, results='asis'}
-sumVars <- kable(params$tableOfVariables, "html",caption = "Summary of Uploaded IeDEA Tables", longtable = T) %>% kable_styling(full_width = FALSE, position = "left", "bordered")
+# removeHTML removes html formatting from a character string--------------
+
+tableToShow <-params$tableOfVariables
+sumVars <- kable(tableToShow, "html",caption = "Summary of Uploaded IeDEA Tables", longtable = T) %>% kable_styling(full_width = FALSE, position = "left", "bordered")
 if (length(params$tableOfVariables) == 4){
   sumVars <- sumVars %>% column_spec(3, width = "25em",border_left = T) %>% column_spec(4, "10em",border_left = T)
 } else sumVars <- sumVars %>% column_spec(3, width = "30em")
@@ -106,61 +122,74 @@ cat("\n")
 
 ```{r uploadStats, echo=FALSE, fig.align='left', message=FALSE, warning=FALSE, results='asis'}
 if (params$includeDataSummary){
-  cat("###"," Summary statistics from uploaded tables","\n")
+  cat("###"," Summary Statistics","\n")
   if (!is.null(params$datasetSummary$statsSummaryTable)){
     print(params$datasetSummary$statsSummaryTable)
+    
   }
   
   print(params$datasetSummary$visitStatsSummaryTable)
- #   print(params$datasetSummary$otherStatsTable)
+  cat("<br>")
+  cat("\n")
+    print(params$datasetSummary$otherStatsTable)
 
 }
 ```
 
 ```{r function to generate heat map, echo=FALSE, fig.height=5, fig.width=5, message=FALSE, warning=FALSE}
 generateHeatMapStoplightPercent <- function(df, xVar, yVar, titleText=NULL, reverse=FALSE){
-  # first replace any percentages between 0 and 0.6 with 1 so they will show up on the map,
-  # since rounding to one decimal place would make those look like 0
-  # if percent == 0, it will remain 0. Values 0.6 and above will round to 1
-  df$percent[between(df$percent, 0.0, 0.6, incbounds = FALSE)] <- 1  
-  df$percent <- round(df$percent,0)
+  # this function generates heatmaps where 100 is good and 0 is bad. 
+  # we take the "floor" of each percent so that anything less than 100.00000 appears
+  # different from 100. We use 80 as the midpoint color 
+  df$percent <- floor(as.numeric(df$percent))
+  addColor <- scale_fill_gradientn(
+    colors = c("red", 
+               "red",
+               "yellow", 
+               muted("green", l = 70, c = 100),
+               muted("green", l = 60, c = 100)),
+    values = rescale(c(0, 20, 80, 99, 100)),
+    limits = c(0,100),
+    na.value = "grey50"
+  )
+
   df$percent[is.na(df$percent)] <- 0
-  addColor <- scale_fill_gradient2(low="red", mid = "yellow", high = muted("green", 50, 80), midpoint = 50)
+  df[[yVar]] <- fct_rev(factor(df[[yVar]], unique(df[[yVar]])))
   
-  if (reverse){
-    addColor <- scale_fill_gradient2(high="red", mid = "yellow", low = muted("green", 50, 80), midpoint = 50, na.value = muted("green", 50, 80))
-  } 
+  max_x_char <- max(nchar(unique(as.character(df[[xVar]]))))
+  if (max_x_char > maxNumberOfHeatMapCharX){
+    xAxisTextInfo <- element_text(angle = 45, hjust = 0.1, size = 9)
+  } else xAxisTextInfo <- element_text(size = 9)
   
-  if (!reverse & all(df$percent>95)){
-    addColor <- scale_fill_gradient2(low=muted("green", 50, 80), 
-                                     mid = muted("green", 50, 80), 
-                                     high = muted("green", 50, 80), midpoint = 50)
-  }
-  if (reverse & all(df$percent < 5)){
-    addColor <- scale_fill_gradient2(low=muted("green", 50, 80), 
-                                     mid = muted("green", 50, 80), 
-                                     high = muted("green", 50, 80), midpoint = 50)
-  }
+    p <- ggplot(data = df, aes_string(x = xVar, y = yVar)) +
+    geom_tile(aes(fill = percent), colour = "white", size = 0.01) +
+    labs(x="",y="") +
+    geom_text(aes(label = percent), size = 3) +
+    scale_y_discrete(expand=c(0,0))+
+    #define new breaks on x-axis
+    scale_x_discrete(expand=c(0,0), position = "top") +
+    geom_text(data = df %>% filter(is.na(percent)),
+             label = "N/A", size = 2) +
+    addColor + 
+  #  labs(title=titleText) +
+    theme_grey(base_size=10)+
+    theme(#axis.text.x=element_text(angle = 45, hjust = 1, size = 9),
+      axis.text.y = element_text(size=9),
+      plot.background = element_blank(),
+      axis.ticks.y = element_blank(),
+      axis.ticks.x = element_blank(),
+      panel.border = element_blank(),
+      legend.position = "none") 
+
+  numX <- uniqueN(df[[xVar]])
   
-  p <- ggplot(data = df, aes_string(x = xVar, y = yVar)) +
-  geom_tile(aes(fill = percent)) + 
-     geom_text(aes(label = percent), size = 3) +
-    # geom_text(aes(label = round(percent, 0), size = 3)) + 
-    # 
-    # geom_text(data = df %>% filter(is.na(percent)),
-    #           label = "0", size = 3) +
-  addColor + 
-  labs(title=titleText) +
-  theme(axis.text.x=element_text(angle=45,vjust = 0.5,size=9),
-   axis.text.y = element_text(size=9))
-    
+  width <- ifelse(numX < 3, 5, 3 + 0.6 * numX)
   return(list(
     p = p,
-    width = 2 + 0.6 * uniqueN(df[[xVar]]),
+    width = width, #2.2 + 0.5 * uniqueN(df[[xVar]]),
     height = 1.5 + 0.5 * uniqueN(df[[yVar]]))
   )
 }
-
 # If no heat map is generated (too few variables, etc) we still need (fake) height and width 
 # arguments for the display code chunk options
 setFakeFigureDim <- function(){
@@ -173,16 +202,53 @@ setFakeFigureDim <- function(){
 
 ```
 
+```{r appearanceBarPlotFunction, echo=FALSE, message=FALSE, warning=FALSE, results='asis'}
 
-```{r appearance, echo=FALSE, fig.align='left', message=FALSE, warning=FALSE, results='asis', dev='svg'}
+createAppearanceBarPlot <- function(df){
+  tableName <- unique(df$table)
+  df <-  df %>% select(-table)
+  p <- ggplot(data = df, 
+              aes(x= reorder( (!! rlang::sym(groupVar)),-percent), y=percent)) + 
+    geom_bar(stat = "identity", fill = "lightgray") + 
+    theme(legend.position="none",axis.text.x=element_text(size = 9), axis.text.y=element_text(size = 9)) + 
+    xlab(groupVar) +
+    ylab(paste0("percent from tblBAS included in ", tableName)) +
+    coord_flip(ylim = c(0, 100))
+  width = 6
+  height = 0.5 + 0.5 * uniqueN(df[[groupVar]])
+  return(list(
+    p = p,
+    width = width,
+    height = height)
+  )
+}
+```
 
-if (length(names(tableData))>1){
-  cat("###"," Summary of Percent of Patients from tblBAS represented in each table","\n")
-  titleText <- "Percent of patients included"
+```{r appearanceHeatmap, echo=FALSE, fig.align='left', message=FALSE, warning=FALSE, results='asis', dev='svg'}
+# if tblBAS was the only table with PATIENT as a main ID, don't create a heatmap
+if (is.null(params$appearanceSummary)) {
+  appearanceHeatmap <- setFakeFigureDim()
+} else {
+  # at least one table with PATIENT was shared in addition to tblBAS
+ # cat("<br>")
+ # cat("  \n  ")
+  cat("### Percent of Patients from tblBAS Included  ")
+
   df <- params$appearanceSummary
-  df <- complete(df, PROGRAM, table)
-  appearanceHeatmap <- generateHeatMapStoplightPercent(df, "table","PROGRAM", titleText)
-} else appearanceHeatmap <- setFakeFigureDim()
+  df <- tidyr::complete(df, (!! groupVarSE), table)
+  # if only one additional table was shared, create a bar plot instead of heat map
+  if (length(unique(df$table)) == 1){
+   appearanceHeatmap <- createAppearanceBarPlot(df)
+  }
+  if (length(unique(df$table)) > 1) {
+    titleText <- "Percent of Patients Included in Tables"
+    xOrder <- names(params$allTables)
+    df[["table"]] <- factor(df[["table"]], levels = xOrder)
+    appearanceHeatmap <- generateHeatMapStoplightPercent(df, "table", groupVar)
+  }
+}
+
+
 ```
 
 ```{r showAppearance, echo=FALSE, fig.height=appearanceHeatmap$height, fig.width=appearanceHeatmap$width, message=FALSE, warning=FALSE, results='asis', dev='svg'}
@@ -191,10 +257,9 @@ if (!is.null(appearanceHeatmap$p)){
 }
 ```
 
-
 ```{r calcHistHeight, echo = FALSE, message=FALSE, warning= FALSE, results='asis'}
 if (params$includeHistograms){
-  cat("## Histograms of important dates by PROGRAM  ")
+  cat("## Histograms of important dates by ", groupVar, "  ")
   numberOfGraphs <- length(levels(params$plotList[[1]]$data$DateName))
   if (numberOfGraphs == 1){
     histHeight <- 2.44
@@ -209,8 +274,8 @@ if (params$includeHistograms){
 ```{r PlotDates, echo=FALSE, fig.height=histHeight, fig.width=6, message=FALSE, warning=FALSE, results='asis', dev='svg'}
 
 if (params$includeHistograms){
-  for (programName in names(params$plotList)){
-    print(params$plotList[[programName]])
+  for (groupName in names(params$plotList)){
+    print(params$plotList[[groupName]])
   }
 }
 cat("\n")
@@ -227,7 +292,7 @@ if (params$includeErrorSummary){
 
   highLevelSummary <- params$highLevel
   if (nrow(highLevelSummary) >0 ){
-    highLevel <- "Note: Download Error Detail spreadsheet from Step 2 for more information  "
+    highLevel <- "Note: Download Error Detail spreadsheet from the Toolkit for more information  "
     # highLevel <- kable(highLevelSummary, row.names = FALSE, caption = "Error/Warning Overview",
     #                    longtable = TRUE,
     #                    col.names = c("Error Code","Count"),
@@ -306,15 +371,30 @@ if (params$includeErrorSummary & (nrow(params$missingSummary)>0)){
 
 ```{r PlotMissing, echo=FALSE, fig.height=5, fig.width=7, message=FALSE, warning=FALSE, results='asis', dev='svg'}
 if (params$includeErrorSummary &
-    (nrow(params$missingSummary) > 0)) {
-    cat("### Summary of Missing Variables by PROGRAM")
-    cat("\n")
-    df <- params$missingSummaryByProgram
-    df <- df %>% filter(!is.na(PROGRAM))
-    dfTest <- complete(df, PROGRAM, variable)
+    (nrow(params$missingSummary) > 1)) {
+ 
+    df <- params$missingSummaryByGroup
+    df <- df %>% filter(!is.na( (!! rlang::sym(groupVar))))
+    dfTest <- tidyr::complete(df, (!! rlang::sym(groupVar)), variable)
+    # if only one variable was missing at all, make a bar chart instead of heat map,
+    # but don't make either if less than 2% missing; not interesting
+    if (uniqueN(dfTest$variable) == 1){
+      if (max(dfTest$percent) < 2) missingHeatmap <- setFakeFigureDim()
+      else {
+        # update to reflect percent NOT missing
+        dfTest$percent <- 100 - dfTest$percent
+         missingHeatmap <- ggplot(dfTest, aes_string(groupVar, "percent")) + 
+           geom_bar(stat = "identity") + ylim(0, yaxis)
+      }
+    } else {
+              # update to reflect percent NOT missing
 
-    missingHeatmap <- generateHeatMapStoplightPercent(dfTest, "variable", "PROGRAM", titleText="Percent Missing Variable Entries", TRUE)
-    # ggplot(data = params$missingSummaryByProgram, aes(x = PROGRAM, y = variable)) + geom_tile(aes(fill = percent)) +
+      dfTest$percent <- 100 - dfTest$percent
+       missingHeatmap <- generateHeatMapStoplightPercent(dfTest, "variable", groupVar, titleText="Percent Variable Entries Complete (Not Missing)", TRUE)
+    }
+
+   
+    # ggplot(data = params$missingSummaryByGroup, aes(x = PROGRAM, y = variable)) + geom_tile(aes(fill = percent)) +
     #   scale_fill_gradient(low = "white", high = "red") + labs(title = "Percent Missing Variable Entries", x = sortBy) +
     #   theme(axis.text.x = element_text(angle = 90, vjust = 0.5))
     # #ggplotly(p)
@@ -322,31 +402,36 @@ if (params$includeErrorSummary &
 ```
 
 ```{r showMissing, echo=FALSE, fig.height=missingHeatmap$height, fig.width=missingHeatmap$width, message=FALSE, warning=FALSE, results='asis', dev='svg'}
-if (!is.null(missingHeatmap$p)){
-  missingHeatmap$p
-}
+# if (!is.null(missingHeatmap$p)){
+#   cat("### Summary of Missing Variables by Group")
+#   cat("\n")
+#   missingHeatmap$p
+# }
 ```
+
 
 ```{r PlotMissingAndUnknown, echo=FALSE, fig.height=5, fig.width=9, message=FALSE, warning=FALSE, results='asis', dev='svg'}
 if (params$includeErrorSummary &&
-    (nrow(params$errorTable$missingAndUnknownByProgram) > 0)) {
+    (nrow(params$errorTable$missingAndUnknownByGroup) > 0)) {
   cat("\n")
-  cat("### Summary of Variables Missing and/or Coded as Unknown")
+  cat("### Percent Variable Entries Complete (Not Missing/Unknown)")
   cat("\n")
   
-  dataset <- params$errorTable$missingAndUnknownByProgram %>% filter(!endsWith(variable,"D_A")) 
+  dataset <- params$errorTable$missingAndUnknownByGroup %>% filter(!endsWith(variable,"D_A")) 
   df <- dataset
-  df <- df %>% filter(!is.na(PROGRAM))
-  df <- complete(df, PROGRAM, variable)
-  missingAndUnknownHeatmap <- generateHeatMapStoplightPercent(df, "variable", "PROGRAM", "Missing/Unknown Variable Entries", TRUE)
+  df$percent <- 100 - df$percent
+  df <- df %>% filter(!is.na( (!! rlang::sym(groupVar)) ))
+  df <- tidyr::complete(df, (!! rlang::sym(groupVar)), variable)
+  # update to show percent NOT missing or unknown
+  df$percent[is.na(df$percent)] <- 100 
+  missingAndUnknownHeatmap <- generateHeatMapStoplightPercent(df, "variable", groupVar, "Percent Variable Entries Complete (Not Missing or Unknown)")
 } else missingAndUnknownHeatmap <- setFakeFigureDim()
 ```
+
 
 ```{r showMissingAndUnknown, echo=FALSE, fig.height=missingAndUnknownHeatmap$height, fig.width=missingAndUnknownHeatmap$width, message=FALSE, warning=FALSE, results='asis', dev='svg'}
 if (!is.null(missingAndUnknownHeatmap$p)){
   missingAndUnknownHeatmap$p
 }
-
+ 
 ```
-
-

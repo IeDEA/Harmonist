@@ -3,15 +3,216 @@ collapseStatus <- reactiveValues(
   noActive = FALSE,
   active = FALSE,
   uploadSummary = FALSE
-  
 )
+
+requestedVariables <- reactive({
+  if (!hubInfo$fromHub) return(NULL)
+  concept <- userDetails()$uploadconcept_mr
+  message <- "Your dataset"
+  if (is.null(uploadList()$MissingTables) &&
+      (is_empty(tablesAndVariables$missingConceptColumns))){
+    return(tags$p(message, "contains", span("all variables requested by", concept, 
+                                             class = "text-green", style = "font-weight: bold")))
+  }
+  
+  numVarsMissing <- tablesAndVariables$missingVariableCount
+  numTables <- length(tablesAndVariables$missingConceptColumns)
+  connector <- ifelse(numTables == 1, "in", "across")
+  return(
+    
+    tagList(
+      tags$p(message, "is", 
+             tags$a(span("missing", numVarsMissing,
+                         makeItPluralOrNot("variable", numVarsMissing),
+                         class = "text-red", style = "font-weight: bold"),
+                    href = "#missingBox"),
+             "requested by", concept,
+             connector, numTables, 
+             paste0(makeItPluralOrNot("table", numTables), ".")
+      )
+             
+              #actionLink("showMissing", span("missing", numVarsMissing,
+                                  # makeItPluralOrNot("variable", numVarsMissing), "requested by", concept,
+                                  # connector, numTables, makeItPluralOrNot("table", numTables), ".",
+                                  # class = "text-red", style = "font-weight: bold")))
+    #  tags$ul(tablesAndVariables$missingConceptColumns) # for now don't repeat info in yellow box
+      )
+  )
+})
+
+
+unrecognizedVariables <- function(){
+  numExtraFiles <- length(uploadList()$ExtraFiles)
+  extraFilesFlag <- numExtraFiles > 0
+  numExtraVariables <- tablesAndVariables$details$non_des_count
+  extraVariablesFlag <- numExtraVariables  > 0
+  numDeprecated <-  tablesAndVariables$details$deprecated_count
+  deprecatedFlag <- numDeprecated > 0
+  numberOfMessages <- sum(extraFilesFlag, extraVariablesFlag, deprecatedFlag)
+  if (numberOfMessages == 0) return(NULL)
+  
+  message <- "In addition, your dataset contains"
+  period1 <- ""
+  period2 <- ""
+  if (numberOfMessages == 3){
+    connector1 <- ","
+    connector2 <- ", and"
+  } else if (numberOfMessages == 2){
+    if (extraFilesFlag){
+      connector1 <- " and"
+      connector2 <- ""
+      if (extraVariablesFlag) period2 <- "."
+    } else {
+      connector1 <- ""
+      connector2 <- " and"
+    }
+    
+  } else {
+    connector1 <- ""
+    connector2 <- ""
+    if (extraFilesFlag) period1 <- "."
+    else if (extraVariablesFlag) period2 <- "."
+  }
+
+  
+  extraFileMsg <- if_else(extraFilesFlag,
+                          paste0(numExtraFiles, " unrecognized ", makeItPluralOrNot("file", numExtraFiles), period1),
+                          "")
+  extraVariablesMsg <- if_else(extraVariablesFlag,
+                               paste0(numExtraVariables, " unrecognized ", makeItPluralOrNot("variable", numExtraVariables), period2),
+                               "")
+  deprecatedVariablesMsg <- if_else(deprecatedFlag,
+                               paste0(numDeprecated, " deprecated ", makeItPluralOrNot("variable", numDeprecated), "."),
+                               "")
+  return(tags$p(message, tags$b(paste0(extraFileMsg, connector1)), tags$b(paste0(extraVariablesMsg, connector2)),
+                tags$b(paste0(deprecatedVariablesMsg)),
+                "See summary box above for details."))
+}
+
+
+output$groupByMenuUI <- renderUI({
+  groupOptions <- groupByInfo()
+  if (is.null(groupOptions$otherGroupOptions)){
+    groups <- "PROGRAM"
+    message <- tagList(
+      tags$p("For reporting purposes your dataset will be grouped by the variable PROGRAM:"),
+      makeBulletedList(groupOptions$programs),
+      tags$em("If you prefer that your data are grouped differently for reports, please include that variable in tblBAS and upload your revised dataset.")
+    )
+    return(message)
+  }
+
+  if (is.null(formattedTables())){
+    groupVar <- currentGroupSelection()
+    if (is.null(groupVar)) groupVar <- "PROGRAM"
+    groupNames <- switch(groupVar, 
+                          "PROGRAM" = sort(groupOptions$programs),
+                          sort(groupOptions$otherGroupOptions[[groupVar]]$levels)
+                          )
+    
+    message <- tagList(
+      tags$p("Your data will be grouped by", tags$b(groupVar),"for reporting into the following",
+             paste0(makeItPluralOrNot("group", length(groupNames)), ":")),
+      makeBulletedList(groupNames),
+      tags$br(),
+      tags$em("To group by a different variable, choose from the list below of alternate grouping variables found in your tblBAS file or upload a revised dataset that includes the desired grouping variable in tblBAS."
+      ),
+      tags$br(),
+      selectInput("groupBySelect", 
+                  "Grouping variables:", 
+                  c("PROGRAM", names(groupOptions$otherGroupOptions)),
+                  selected = groupVar)
+    )
+    return(message)
+  }
+  
+  else {
+    groupVar<- finalGroupChoice()
+    if (groupVar == "PROGRAM") groupNames <- groupOptions$programs
+    else groupNames <- groupOptions$otherGroupOptions[[groupVar]]$levels
+    tagList(
+      tags$p("Your data will be grouped for reporting purposes by", tags$b(groupVar)),
+      makeBulletedList(groupNames),
+      tags$br(),
+      tags$em("Data checks are complete and grouped by ", groupVar, ". Upload your dataset again to choose a different grouping variable. Grouping variables must be included in tblBAS.")
+    )
+  }
+  
+})
+
+
+showGroupModal <- function(saveAndGo = FALSE){
+  if (!is.null(finalGroupChoice()) || is.null(groupByInfo()$otherGroupOptions)){ 
+    buttons <- modalButton("Close")
+  } else {
+    # other group options exist
+    if (saveAndGo){
+      # the user was attempting to continue to data quality checks with one patient group. Now
+      # once they save, start DQ checks. Otherwise, just save
+      saveButton <- actionButton("saveGroupAndGo", "Save", class = "btn-success")
+      cancelButton <- actionButton("cancelAndGo", "Cancel")
+    } else {
+      saveButton <- actionButton("saveGroup", "Save", class = "btn-success")
+      cancelButton <- actionButton("cancelGroup", "Cancel")
+    }
+    buttons <- tagList(
+      cancelButton,
+      saveButton
+    )
+  } 
+  
+  
+
+  showModal(tags$div(id="dataQualityChecks",
+                     modalDialog(
+                       easyClose = FALSE, 
+                       title = "Dataset Grouping Options", 
+                       size = 'l',
+ 
+                       uiOutput("groupByMenuUI"),
+                       footer = buttons,
+                       fade = FALSE
+                     )
+  ))
+}
+
+
+observeEvent(input$openGroupModal,{
+  showGroupModal()
+})
+
+observeEvent(input$cancelGroup,{
+  removeModal()
+})
+
+observeEvent(input$cancelAndGo,{
+  removeModal()
+  startStep2()
+})
+
+observeEvent(input$saveGroup,{
+  groupByChoice(input$groupBySelect)
+  removeModal()
+})
+
+observeEvent(input$saveGroupAndGo,{
+  groupByChoice(input$groupBySelect)
+  removeModal()
+  startStep2()
+})
+
+
+observeEvent(input$groupBySelect,{
+  currentGroupSelection(input$groupBySelect)
+})
 
 output$uploadIntro <- renderUI({
   tagList(
     tags$h3(class = "row_text title",tags$strong(span("STEP 1 ", class = "text-red")),
-            " Upload Files", backToHubMessage()),
+            " Upload files", backToHubMessage()),
     
-    tags$h5(class = "row_text subtitle", step1Subtitle) #in text.R
+    tags$h5(class = "row_text subtitle", 
+            "Choose the files containing your IeDEA tables to check for data quality. After files are uploaded, review the table summarizing uploaded files and variables.")
   )
 })
 
@@ -19,9 +220,6 @@ observeEvent(uploadList(),{
   if (is.null(uploadList())) return(NULL)
   collapseStatus$noActive <- TRUE
   collapseStatus$active <- TRUE
-  if (length(uploadList()$AllDESTables) > maxTablesWithoutCollapsing){ #in definitions.R
-    collapseStatus$uploadSummary <- TRUE
-  }
 })
 
 observeEvent(input$noActiveID,{
@@ -35,6 +233,45 @@ observeEvent(input$activeID,{
 observeEvent(input$uploadSummaryID,{
   collapseStatus$uploadSummary <- !collapseStatus$uploadSummary
 })
+
+getPreferredDataFormats <- function(concept){
+  formatPrefs <- names(concept)[str_detect(names(concept), "dataformat_prefer")]
+  requestedFormats <- c()
+  for (formatPref in formatPrefs){
+    formatChosen <- concept[[formatPref]]
+    if (is.null(formatChosen)) next
+    if (formatChosen == "1") {
+      index <- as.numeric(str_after_last(formatPref, "_"))
+      formatName <- fileFormats[[as.character(index)]] #fileFormats in definitions.R
+      requestedFormats <- c(requestedFormats, formatName)
+    }
+  }
+  if (is.null(requestedFormats)) requestedFormats <- "None specified"
+  return(requestedFormats)
+}
+
+getContactDisplay <- function(contact, datacontactFlag = FALSE){
+  if (is_blank(contact)) return(NULL)
+  regionNum <- as.numeric(contact$person_region)
+  regionCode <- regionData$region_code[[regionNum]]
+  name <- paste(contact$firstname, contact$lastname, paste0("(", regionCode,")"))
+  if (datacontactFlag){
+    displayText <- 
+      tags$li(a(name, href=paste0("mailto:", contact$email), target="_blank"),
+              em("(Data contact),"), contact$institution)
+  } else {
+    # in case Institution field is blank in REDCap:
+    if (safeTrimWS(contact$institution) == ""){
+      institution <- ""
+    } else {
+      institution <- paste0(", ", contact$institution)
+    }
+    displayText <- 
+      tags$li(a(name, href=paste0("mailto:", contact$email), target="_blank"),
+              institution)
+  }
+  return(displayText)
+}
 
 # Show user details about the current data request
 dataRequestInfo <- reactive({
@@ -56,21 +293,7 @@ dataRequestInfo <- reactive({
   else {
     req(userDetails())
     req(concept())
-    contact1 <- concept()$contact1
-    contact1RegionNum <- as.numeric(contact1$person_region)
-    contact1RegionCode <- regionData$region_code[[contact1RegionNum]]
-    contact1Name <- paste(contact1$firstname, contact1$lastname, paste0("(", contact1RegionCode,")"))
-    contact1Email <- contact1$email
-    contact2 <- concept()$contact2
-    contact2RegionNum <- as.numeric(contact2$person_region)
-    contact2RegionCode <- regionData$region_code[[contact2RegionNum]]
-    contact2Name <- paste(contact2$firstname, contact2$lastname, paste0("(", contact2RegionCode,")") )
-    contact2Email <- contact2$email
-    datacontact <- concept()$datacontact
-    dataRegionNum <- as.numeric(datacontact$person_region)
-    dataRegionCode <- regionData$region_code[[dataRegionNum]]
-    dataName <- paste(datacontact$firstname, datacontact$lastname, paste0("(", dataRegionCode,")"))
-    dataEmail <- datacontact$email
+  
     concept_url <- paste0(plugin_url, "?token=",
                       userDetails()$uploadhub_token, "&option=ttl",
                       "&record=", userDetails()$uploadconcept_id,
@@ -85,7 +308,8 @@ dataRequestInfo <- reactive({
         span(x, class = tableLabelClass)
       })
     )
-
+    
+    requestedFormats <- getPreferredDataFormats(concept())
     box(
       width = 10,
       collapsible = TRUE,
@@ -107,33 +331,32 @@ dataRequestInfo <- reactive({
                    class = "col-md-10"
                )
         ),
-        tags$br(),
-        # I need to make table names colored badges
+
         tags$p(
-          div(strong("Requested Tables: "),class="col-md-2"),
+          div(strong("Requested Tables "),class="col-md-2"),
           tags$div(listOfTableLabels, class="col-md-10"), class = "row toolkit"),
-        tags$br(),
+        tags$p(
+          div(strong("Requested Data Format "),class="col-md-2"),
+          tags$div(paste(requestedFormats, collapse = ", "), class="col-md-10"), class = "row toolkit"
+        ),
         tags$p(div(strong("Contacts"), class = "col-md-2"),
                div(
                  tags$ul(
-                   tags$li(a(contact1Name, href=paste0("mailto:", contact1Email), target="_blank"), ",", contact1$institution),
-                   tags$li(a(contact2Name, href=paste0("mailto:", contact2Email), target="_blank"), ",", contact1$institution)
+                   getContactDisplay(concept()$contact1),
+                   getContactDisplay(concept()$contact2),
+                   getContactDisplay(concept()$datacontact, datacontactFlag = TRUE)
                  ),
                  class = "col-md-10"
                ),
                class = "row toolkit"
         ),
-        tags$br(),
-        
         tags$p(div(strong("Data Downloaders"), class = "col-md-2"),
-               div(
-                 tags$ul(
-                   tags$li(
-                     a(dataName, href = paste0("mailto:", dataEmail), target="_blank"),
-                     ",", datacontact$institution)), class = "col-md-10"),
-               class = "row toolkit")
-        
-        
+                div(
+                  tags$ul(
+                    lapply(concept()$downloaders, function(x){
+                      getContactDisplay(x)})
+                    ), class = "col-md-10"),
+                class = "row toolkit")
       )
     )
   }
@@ -148,12 +371,15 @@ output$dataRequestInfo <- renderUI({
 })
 
 output$sopFinal <- downloadHandler(
-  
+
   filename = "sopfinal.pdf",
   content = function(file) {
     record_id_Harmonist3 <- hubInfo$userDetails$datacall_id
-    
-    sopfinal <- downloadREDCapFile(file, tokenForHarmonist3, record_id_Harmonist3, "sop_finalpdf")
+    sopfinal <- downloadREDCapFile(file, tokenForHarmonist3,
+                                   record_id_Harmonist3, "sop_finalpdf")
+    if (inherits(sopfinal, "postFailure")) {
+      # File failed to download, not sure there's anything to do about it
+    }
   }
 )
 
@@ -162,32 +388,41 @@ output$uploadMissingSummary <- renderUI({
   if (is.null(uploadList())) return(NULL)
   if (is.null(uploadedTables())) return(NULL)
   if (is.null(uploadList()$MissingTables) &&
-      (is.null(tablesAndVariables$list$missingConceptColumnsDF))) return(NULL)
+      (is_empty(tablesAndVariables$missingConceptColumns))) return(NULL)
   if (!is.null(uploadList()$MissingTables)){
-    listOfTables <- lapply(uploadList()$MissingTables, function(x){return(tags$li(x))})
-    missingTablesMessage <- tagList(
-      tags$p("The following tables requested by", userDetails()$uploadconcept_mr, "were not found:"),
-      tags$ul(listOfTables)
+    listOfTables <- tagList(
+      lapply(uploadList()$MissingTables, function(x){
+        tableLabelClass <- paste0("label des-",tableDef[[x]]$table_category)
+        span(x, class = tableLabelClass)
+      })
+    )
+    missingTablesMessage <- tags$p(
+      div(strong("The following",
+                 makeItPluralOrNot("table", length(uploadList()$MissingTables)),
+                 "requested by", userDetails()$uploadconcept_mr, "were not found:"),
+          listOfTables)
     )
   } else missingTablesMessage <- NULL
-
-  if (!is.null(tablesAndVariables$list$missingConceptColumnsDF)){
+  
+  if (!is_empty(tablesAndVariables$missingConceptColumns)){
     missingColsMessage <- 
       tagList(
-        tags$p("The following fields requested by", userDetails()$uploadconcept_mr, "were not found:"),
-        renderTable(tablesAndVariables$list$missingConceptColumnsDF)
+        tags$p(strong("The following",
+                      makeItPluralOrNot("variable", tablesAndVariables$missingVariableCount),
+                      "requested by", userDetails()$uploadconcept_mr, "were not found:")),
+        tags$ul(tablesAndVariables$missingConceptColumnsFormatted)
       )
   } else missingColsMessage <- NULL
   fluidRow(  
-  box(
-    width = 10,
-    solidHeader = TRUE,
-    status = "warning",
-    title = "Missing",
-    missingTablesMessage,
-    missingColsMessage
-  
-  )
+    tags$a(id = "missingBox"),
+    box(
+      width = 10,
+      solidHeader = TRUE,
+      status = "warning",
+      title = "Missing Variables",
+     # missingTablesMessage, JUDY remove this if final decision
+      missingColsMessage
+    )
   )
 })
 
@@ -197,26 +432,58 @@ output$uploadSummary <- renderUI({
   if (resetFileInput$reset) return(NULL)
   if (is.null(uploadList())) return(NULL)
   if (is.null(uploadedTables())) return(NULL)
+  uploadInfo <- renderTable({tablesAndVariables$details$variableSummaryToDisplay}, 
+                            sanitize.text.function = function(x) x) #this allows escape html in renderTable
+  
+  # if the uploaded dataset included deprecated variables, add explanatory line below table
 
-  tablesAndVariables$list$variableSummaryToDisplay
-  uploadInfo <- renderTable(tablesAndVariables$list$variableSummaryToDisplay)
+    if (tablesAndVariables$details$deprecated_count > 0){
+      deprecatedMessage <- div(
+        tags$em(
+          tags$span("Note: Deprecated variables are shown in red. See", 
+                    
+                    tags$a(tags$u("iedeades.org"), href="http://iedeades.org", 
+                           target="_blank", style= "color: #dd4b39"),
+                    "for details.", style= "color: #dd4b39")
+        )
+      )
+  } else deprecatedMessage <- NULL
+  
+  if (!is_empty(uploadList()$emptyFiles)){
+    emptyFileMessage <- tagList(
+      tags$p(" The following uploaded",
+             makeItPluralOrNot("file", length(uploadList()$emptyFiles)),
+             "were empty:"),
+      makeBulletedList(uploadList()$emptyFiles)
+    )
+  } else emptyFileMessage <- NULL
+  
+  if (!is.null(tablesAndVariables$blankTables)){
+    blankTableMessage <- tagList(
+      tags$p(" The following file(s) had IeDEA DES table names and headers but 0 valid records:"),
+      makeBulletedList(tablesAndVariables$blankTables)
+    )
+  } else blankTableMessage <- NULL
+  
   if (length(uploadList()$ExtraFiles) == 0){
     extraFileMessage <- NULL
   } else {
     extraFileMessage <- tagList(
-      tags$p(" File(s) in other formats or not conforming to IeDEA DES (Excluded from data quality checks):"),
-      renderTable({
-        uploadList()$ExtraFiles
-      }, rownames = FALSE, colnames = FALSE))
-    
+      tags$p(" ",
+             makeItPluralOrNot("File", length(uploadList()$ExtraFiles)),
+             "in other format or not conforming to the IeDEA DES (excluded from data quality checks):",
+             paste(uploadList()$ExtraFiles, collapse = ", "))
+      
+      # renderTable({
+      #   uploadList()$ExtraFiles
+      # }, rownames = FALSE, colnames = FALSE)
+    )
   }
   
   if (any(uploadList()$tablesWithNoPatientID %in% pregnancyTables)){
-    filesNotCheckedMessage <- tagList(
-      tags$p("Tables that use a key identifier other than PATIENT are excluded from data quality checks at this time but will be included in the next version of Harmonist"),
-      renderTable({
-        uploadList()$tablesWithNoPatientID[uploadList()$tablesWithNoPatientID %in% pregnancyTables]
-      }, rownames = FALSE, colnames = FALSE)
+    filesNotCheckedMessage <- 
+      tags$p("The following tables that use a key identifier other than PATIENT are excluded from some data quality checks at this time but will be included in the next version of Harmonist:",
+             paste0(combine_words(uploadList()$tablesWithNoPatientID[uploadList()$tablesWithNoPatientID %in% pregnancyTables]), ".")
     )
   } else {
     filesNotCheckedMessage <- NULL
@@ -227,13 +494,16 @@ output$uploadSummary <- renderUI({
       box(
         id = "uploadSummary",
         width = 10,
-        title = actionLink("uploadSummaryID", span("Summary of uploaded IeDEA tables", style = "color: white")),
+        title = actionLink("uploadSummaryID", span("Summary of Uploaded IeDEA Tables", style = "color: white")),
         solidHeader = TRUE,
         status = "primary",
         collapsible = TRUE,
         collapsed = collapseStatus$uploadSummary,
         uploadInfo,
+        deprecatedMessage,
+        blankTableMessage,
         extraFileMessage,
+        emptyFileMessage,
         filesNotCheckedMessage
       )
     )
@@ -247,17 +517,15 @@ output$selectFiles <- renderUI({
 
   uploadFileUI <- 
     tagList(
-      
-      
-    fluidRow(
+      fluidRow(
         box(width = 5, 
             status= "success",
             solidHeader = TRUE,
             title = "Select Data Files", 
             tagList(
               tags$p("Upload data in the ",
-                           a("IeDEA Data Exchange Standard (IeDEA DES)", 
-                     href="http://iedeades.org", target="_blank"),
+                     a("IeDEA Data Exchange Standard (IeDEA DES)", 
+                       href="http://iedeades.org", target="_blank"),
                      " format. tblBAS is required."),
               tags$p("Allowed file formats include ", 
                      strong("CSV, SAS, Stata, SPSS, or a ZIP containing multiple files"), " of this type."),
@@ -270,7 +538,16 @@ output$selectFiles <- renderUI({
         box(width = 5,
             title = "Use Sample Dataset",
             tags$p("Launch the Toolkit with a sample dataset (fake data) for practice, testing, and demonstrations."),
-            actionButton("runWithSample", "Launch with Sample Data"))
+            tags$p("The sample dataset contains 48 intentionally error-filled records representing the following IeDEA DES tables:",
+                   tagList(
+                     lapply(c("tblBAS", "tblLTFU", "tblVIS", "tblART", "tblLAB", "tblLAB_BP"), function(x){
+                       tableLabelClass <- paste0("label des-",tableDef[[x]]$table_category)
+                       span(x, class = tableLabelClass)
+                     })
+                   )),
+            tags$br(),
+            actionButton("runWithSample", "Launch with Sample Data")
+        )
       )
     )
   
@@ -278,16 +555,36 @@ output$selectFiles <- renderUI({
     return(uploadFileUI)
   }
   else if (!is.null(uploadedTables())){
+    # revisit here Judy  - maybe call groupByInfo() here
+    if (is.null(groupByInfo()$otherGroupOptions)) buttonLabel <- "Details"
+    else if (!is.null(finalGroupChoice())) buttonLabel <- "Details"
+    else buttonLabel <- "Change selection"
+
+    if (!hubInfo$fromHub){
+      requiredVariableMessage <- 
+        tags$p("Your dataset contains", 
+               span("all required DES variables", class = "text-green", style = "font-weight: bold"))
+    } else requiredVariableMessage <- NULL # required variables are also requested variables
+    requestedVariablesMessage <- requestedVariables()
+    unrecognizedFileAndVariableMessage <- unrecognizedVariables()
+    reportGroupingMessage <- tags$p("Your dataset will be subdivided for reports by ", 
+                                    tags$b(groupByChoice()),
+                                    xsButton("openGroupModal", label = buttonLabel)
+                                    )
     return(
       tagList(
       fluidRow(class = "rowUploadComplete",
                box(
                  width = 5, 
-                 title = span("Upload complete", style = "color: white"),
+                 title = span("Upload Complete", style = "color: white"),
                  solidHeader = TRUE,
                  status = "success",
                  tagList(
-                   tags$h3(span(icon("check-square-o"),"Dataset successfully uploaded")),
+                   tags$p(tags$b(span(icon("check-square"),"Dataset successfully uploaded"))),
+                   requiredVariableMessage,
+                   requestedVariablesMessage,
+                   unrecognizedFileAndVariableMessage,
+                   reportGroupingMessage,
                    actionButton("step2","Continue to Step 2", class="btn-success")
                  )
                ),
@@ -296,7 +593,7 @@ output$selectFiles <- renderUI({
               
                  title = span("Restart session"),
                  tagList(
-                   tags$h3(span("I would like to upload a different dataset")),
+                   tags$p("Start over and upload a", tags$b("revised or different dataset.")),
                    actionButton("uploadNew","Upload new dataset")
                  )
                )))
@@ -308,15 +605,11 @@ output$selectFiles <- renderUI({
   }
 })
 
-
-# for development purposes: display user info read in from URL
-output$parameters <- renderText({
-  userDetails <- userDetails()
-  if (is.null(userDetails$user)) return(NULL)
-  return(paste(paste0("userID = ",userDetails$user), 
-               paste0("region = ", userDetails$regionID), 
-               paste0("uploadconcept_mr = ",userDetails$uploadconcept_mr),
-               paste0("token = ", userDetails$token), sep = ",  "))
+observe({
+  if (tooBusy()) {
+    shinyjs::hide("selectFiles")
+  }
+  else shinyjs::show("selectFiles")
 })
 
 observeEvent(input$testContinue,{

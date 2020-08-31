@@ -4,10 +4,28 @@ output$helpTabUI <- renderUI({
             "Help", backToHubMessage()),
     tags$h5(class = "row_text subtitle",
             ""),
-      tags$p("Download the ",
-             tags$a("IeDEA Harmonist Error Spreadsheet Guide ", href = "errorSpreadsheetGuide.pdf", target="_blank"), " to better understand the columns of the error detail spreadsheet available in Step 2."),
-      tags$p("View the ", 
-             tags$a("IeDEA Harmonist Data Toolkit Video ", href = "https://youtu.be/pL_RRhvzX-w", target="_blank"), " for a demonstration.")
+    tags$p("Helpful resources for Harmonist Data Toolkit users:",
+           tags$li(tags$a("Toolkit Quick Reference Guide for IeDEA Data Managers", 
+                          href = "toolkitOnePageRef.pdf", target = "_blank")),
+           tags$li(tags$a("IeDEA Harmonist Data Quality Checks Overview", 
+                          href = "dataQualityChecks.pdf", target = "_blank")), 
+           tags$li(tags$a("IeDEA Harmonist Error Spreadsheet Guide ", 
+                          href = "errorSpreadsheetGuide.pdf", target="_blank")), 
+           tags$li(tags$a("IeDEA Harmonist Data Toolkit Demonstration Video ", 
+                          href = "https://youtu.be/pL_RRhvzX-w", target="_blank")),
+           tags$li("Answers to frequently asked questions (below)")
+           )
+          # " to better understand the columns of the error detail spreadsheet available in Step 2."),
+           ,
+    fluidRow(
+      htmlOutput("toolkitFAQ", seamless = "seamless")
+    )
+    
   )
   
+})
+
+output$toolkitFAQ <- renderUI({
+  tags$iframe(src="https://redcap.vanderbilt.edu/plugins/iedea/index.php?option=dfq",
+              height="900", width=875, style = "border:0")
 })
