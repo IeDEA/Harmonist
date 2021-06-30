@@ -26,6 +26,6 @@ output$helpTabUI <- renderUI({
 })
 
 output$toolkitFAQ <- renderUI({
-  tags$iframe(src="https://redcap.vanderbilt.edu/plugins/iedea/index.php?option=dfq",
+  tags$iframe(src = faq_url,
               height="900", width=875, style = "border:0")
 })

@@ -244,16 +244,20 @@ createListsOfTablesAndVariables <- function(tableList, tableDef){
     non_des_count <- 0
     toDisplay <- tibble("Table" = tableBadge(names(tableList)), 
                             "Records" = numberOfRecords,
-                            "IeDEA DES Variables" = unlist(des_variables_list))
+                            "networkName datamodel_abbrev Variables" = unlist(des_variables_list))
   } else {
     all_non_des <- unique(unlist(non_des_variables))
     non_des_count <- length(all_non_des[!all_non_des %in% approvedExtraVariables])
     non_des_to_display <- lapply(non_des_variables, function(x)paste0(x, collapse = ", "))
     toDisplay <- tibble("Table" = tableBadge(names(tableList)), 
                             "Records" = numberOfRecords,
-                            "IeDEA DES Variables" = unlist(des_variables_list),
+                            "networkName datamodel_abbrev Variables" = unlist(des_variables_list),
                             "Extra Variables" = unlist(non_des_to_display))
   }
+  
+  names(toDisplay) <- gsub("networkName datamodel_abbrev", 
+                           paste0(networkName, " ", projectDef$datamodel_abbrev),
+                           names(toDisplay))
   # return details for uploadTab upload summary
   return(
     list(

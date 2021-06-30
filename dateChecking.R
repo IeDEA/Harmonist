@@ -26,7 +26,7 @@ dateErrorCode <- list(
 
 addToErrorFrameDateFormatErrors <- function(resources, groupVar, errorFrame, table, field, tableName, errorNumber, severity, ...
                                            ){
-  errorFrame <- addToErrorFrame(resources$formattedTables$tblBAS, groupVar, errorFrame, table, field, tableName, errorType = dateErrorType[[errorNumber]],
+  errorFrame <- addToErrorFrame(resources$formattedTables[[indexTableName]], groupVar, errorFrame, table, field, tableName, errorType = dateErrorType[[errorNumber]],
                               errorCode = dateErrorCode[[errorNumber]], 
                               severity, message = dateErrorDesc[[errorNumber]], ...)
   return(errorFrame)

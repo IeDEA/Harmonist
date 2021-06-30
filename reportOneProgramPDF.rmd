@@ -32,15 +32,20 @@ params:
 tableData <- params$allTables
 program <- params$programsInReport
 groupVar <- params$groupVar
+
 userDetails <- params$userDetails
 if (userDetails$uploadconcept_mr == "MR000"){
   headerMessage <- NULL
 } else headerMessage <- paste0("Dataset submitted for Concept ", userDetails$uploadconcept_mr)
 
-
 if (userDetails$uploaduser_id == ""){
   regionMessage <- NULL
-} else regionMessage <- paste0("from IeDEA Region ", params$region)
+} else regionMessage <- paste0("from Region ", params$region)
+
+if (!(params$datasetDesc=="")){
+  datasetLabel <- params$datasetDesc
+} else {datasetLabel <- NULL}
+
 ```
 \centering
 
@@ -50,7 +55,7 @@ if (userDetails$uploaduser_id == ""){
 
 Report date: `r Sys.Date()`
 
-`r params$datasetDesc`
+`r datasetLabel` 
 
 Total number of patients from Program `r program` in dataset: `r params$datasetSummary$totalPatients`
 
@@ -65,7 +70,6 @@ knitr::opts_chunk$set(
 
 ## Dataset Summary
 
-
 ```{r summary2, echo=FALSE, fig.align='left', message=FALSE, warning=FALSE, results='asis'}
 print(params$datasetSummary$tableSummaryKable)
 ```
@@ -77,7 +81,11 @@ if (params$includeDataSummary){
   }
   print(params$datasetSummary$visitStatsSummaryTable)
   if (!is.null(params$datasetQuality$appearancePlot)){
-    print(params$datasetQuality$appearancePlot)
+    if (is.character(params$datasetQuality$appearancePlot)){
+      cat(params$datasetQuality$appearancePlot)
+    } else {
+      print(params$datasetQuality$appearancePlot)
+    }
   }
 }
 if (params$includeErrorSummary){
@@ -91,7 +99,6 @@ if (params$includeErrorSummary){
   }
 }
 ```
-
 
 ```{r calcHistHeight, echo = FALSE, message=FALSE, warning= FALSE, results='asis'}
 if (params$includeHistograms){
@@ -117,7 +124,7 @@ if (params$includeHistograms){
 
 ```{r kable, echo=FALSE, fig.height=5, fig.width=7.5, results='asis'}
 if (params$includeErrorSummary){
-  cat("## Data Quality Summary for PROGRAM ", Hmisc::latexTranslate(program),"  ")
+  cat("## Data Quality Summary for ", groupVar, Hmisc::latexTranslate(program),"  ")
   cat("\n")
   
   if (is.null(params$programSummary$errorSummaries)){
@@ -141,7 +148,7 @@ if (params$includeErrorSummary){
   }
   if (!is.null(params$programSummary$missingSummary)){
     if (nrow(params$programSummary$missingSummary)>0){
-      temp <- kable(params$programSummary$missingSummary, row.names = FALSE,
+      temp <- kbl(params$programSummary$missingSummary, row.names = FALSE,
                     caption = "Summary of Important Missing Variable Entries", format = "latex",
                     longtable = TRUE, booktabs = TRUE, 
                     col.names = c("Table", "Variable", "Count", "Percent")) %>%

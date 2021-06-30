@@ -16,8 +16,37 @@ output$submitSummary <- renderUI({
   # if submission already successful, hide submit UI
   if (!is.null(submitSuccess())) return(NULL)
   
+  # if this research network does not have a hub, no Submit option is available
+  if (projectDef$hub_y == 0){
+    return(
+      tagList(
+        tags$h3(class = "row_text title",tags$strong(span("STEP 4 ", class = "text-green")),
+                " Submit data"),
+        tags$h5(class = "row_text subtitle","Submit dataset for selected concept."),
+        fluidRow(
+          box(
+            width = 10,
+            title = span("Submit Data"),
+            tagList(
+              span(
+                tags$h5("This option is only available in research networks that have implemented a Harmonist Hub.")
+              )
+            )
+          )
+        )
+      )
+    )
+  }
+  
   # if the user does not have a token OR is using the sample dataset, no option to submit should exist
   if ((!hubInfo$fromHub) || useSampleData()){
+    if (networkName == "IeDEA"){
+      submitInfo <- tags$p("You may select an active data request on the ", 
+                           a(" IeDEA Hub", href="http://iedeahub.org", target="_blank")," page.")
+
+    } else {
+      submitInfo <- NULL
+    }
     return(
       tagList(
         tags$h3(class = "row_text title",tags$strong(span("STEP 4 ", class = "text-green")),
@@ -30,8 +59,11 @@ output$submitSummary <- renderUI({
             tagList(
               span(
                 tags$h5("This option is only available when submitting datasets for an active concept. "),
-                tags$p("You may select an active data request on the ", a(" IeDEA Hub", href="http://iedeahub.org", target="_blank")," page.")
-              ))))
+                submitInfo
+              )
+            )
+          )
+        )
       )
     )
   }
@@ -138,7 +170,7 @@ output$submitSummary <- renderUI({
               readyMsg,
               tags$p(tags$b("Dataset Summary:")),
               tags$ul(
-                tags$li(nrow(formattedTables()$tblBAS), "unique patient records included."),
+                tags$li(nrow(formattedTables()[[indexTableName]]), "unique patient records included."),
                 tags$li(length(tablesAndVariables$tablesToCheck), "IeDEA DES",
                         makeItPluralOrNot("table", length(tablesAndVariables$tablesToCheck)),
                         "included."),
@@ -524,7 +556,7 @@ observeEvent(input$submit,{
     "data_upload_region" = userDetails()$uploadregion_id, #from Harmonist 18
     "responsecomplete_ts" = as.character(Sys.time()),
     "upload_notes" = input$uploadNotes,
-    "data_upload_n" = length(formattedTables()$tblBAS$PATIENT),
+    "data_upload_n" = length(formattedTables()[[indexTableName]][[patientVar]]),
     "data_upload_bucket" = AWS_bucket_name,
     "data_upload_folder" = uploadInfo$awsPath,
     "data_upload_zip" = uploadInfo$zipFileName,
@@ -651,7 +683,6 @@ observeEvent(input$feedback,{
 
 observeEvent(input$step4DownloadDetailModal,{
   lastActivity(Sys.time())
-  # For now, maxErrorsForHTML is set to zero; change to enable html error reports JUDY
   downloadDetailModal()
   
 })

@@ -1,4 +1,4 @@
-add_A_to_errorFrame <- function(tblBAS, groupVar, errorFrame, first_A, first_A_flag, 
+add_A_to_errorFrame <- function(indexTable, groupVar, errorFrame, first_A, first_A_flag, 
                                 second_A, second_A_flag, firstDate, secondDate, 
                                 tableName_first, tableName_second,
                                 tableOfErrorRecords_first, 
@@ -44,7 +44,7 @@ add_A_to_errorFrame <- function(tblBAS, groupVar, errorFrame, first_A, first_A_f
   }
  
   message <- paste0(message, first_A_message, second_A_message, ".")
-  errorFrame <- addToErrorFrame(tblBAS, groupVar,
+  errorFrame <- addToErrorFrame(indexTable, groupVar,
                                 errorFrame = errorFrame,
                                 table = tableOfErrorRecords_second,
                                 field = secondDate,
@@ -66,19 +66,31 @@ add_A_to_errorFrame <- function(tblBAS, groupVar, errorFrame, first_A, first_A_f
 # compare every date field with dates that should be before most dates, exceptions specified
 globalDateChecksBefore <- function(errorFrame, resources){
   gc()
+  # dateApproxFlag (set in definitions.R, is TRUE if this network has a date approximation 
+  # variable that can accompany date variables
+  if (dateApproxFlag){
+    dateRelatedExtensions <- c(dateExt, projectDef$date_approx)
+  } else {
+    dateRelatedExtensions <- dateExt
+  }
+  
   # find *before* global date fields present in dataset, store in checkTheseGlobalDates
   globalChecks <- globalDateBeforeChecks
-  checkTheseGlobalDates <- intersect(names(globalChecks), unlist(resources$tablesAndVariables$matchingColumns, use.names = FALSE))
+  checkTheseGlobalDates <- intersect(names(globalChecks), 
+                                     unlist(resources$tablesAndVariables$matchingColumns, use.names = FALSE))
   for (globalDateName in checkTheseGlobalDates){
     print(globalDateName)
     # read in details about this global date field, such as table name, exceptions
     dateCheck <- get(globalDateName, globalChecks)
+    
     globalDate <- resources$formattedTables[[dateCheck$table]] %>% 
       filter(!!rlang::sym(globalDateName) != dateIndicatingUnknown) %>%  
       filter(!is.na(!!rlang::sym(globalDateName))) %>% 
-      select("PATIENT", ends_with("_D"), ends_with("D_A"), recordIndex1=recordIndex)
-    # iterate through all uploadedTables that have PATIENT as ID
-    for (tableName in c("tblBAS", tablesAndVariables$tablesToCheckWithPatientID)){
+      select(!!patientVarSym, ends_with(dateRelatedExtensions), 
+             recordIndex1=recordIndex)
+    
+    # iterate through all uploadedTables that have patientVar as primary ID
+    for (tableName in c(indexTableName, tablesAndVariables$tablesToCheckWithPatientID)){
       # find all of the date fields in current table, except global date field and any exceptions
       variablesInTable <- names(resources$formattedTables[[tableName]])
       # find all the dates in the current table but leave out the globalDate and any exceptions
@@ -86,17 +98,27 @@ globalDateChecksBefore <- function(errorFrame, resources){
                               variablesInTable)
       if (is_empty(dateFields)) next
       dateFields <- dateFields[!(dateFields %in% c(globalDateName, dateCheck$exceptions))]
-      # find _A columns for only those dates included in dateFields
-      possibleDate_A_fields <- paste0(dateFields, "_A")
-      date_A_fields <-  intersect(variablesInTable[which(endsWith(variablesInTable, "_A"))], possibleDate_A_fields)
+      if (is_empty(dateFields)) next
       
+      if (dateApproxFlag){
+        # find _A columns for only those dates included in dateFields
+        possibleDate_A_fields <- paste0(dateFields, projectDef$date_approx)
+        date_A_fields <-  intersect(variablesInTable, 
+                                    possibleDate_A_fields)
+      } else {
+        date_A_fields <- NULL
+      }
+
       # if the current table is different from dateCheck$table, then merge the global date table 
-      # with the current table, columns recordIndex, PATIENT, and all dateFields, merge by PATIENT 
+      # with the current table, columns recordIndex, patientVar, and all dateFields, merge by patientVar 
       # Otherwise, if current table IS the same as dateCheck$table, then include all globalDate and other date fields
       if (dateCheck$table != tableName){
         dateTable <- left_join(globalDate, 
-                               resources$formattedTables[[tableName]][,c("recordIndex","PATIENT",dateFields, date_A_fields)], 
-                               by="PATIENT") %>% rename(recordIndex2=recordIndex)
+                               resources$formattedTables[[tableName]][,c("recordIndex",
+                                                                         patientVar,
+                                                                         dateFields, 
+                                                                         date_A_fields)], 
+                               by=patientVar) %>% rename(recordIndex2=recordIndex)
       } else dateTable <- globalDate %>% mutate(recordIndex2=recordIndex1)
       firstDate <- globalDateName
       table1Name <- dateCheck$table
@@ -111,9 +133,16 @@ globalDateChecksBefore <- function(errorFrame, resources){
         #errorType <-  paste0("Date before ", firstDate) 
         errorType <-  paste0(secondDate, " before ", firstDate) 
         message <- paste0(secondDate, " should not be before ", firstDate, ".")
-        #------Simple case first: if no _A fields, these are all errors-----------------------
-        if (!(exists(paste0(firstDate, "_A"), badDates)) && !(exists(paste0(secondDate, "_A"), badDates))){
-          errorFrame <- addToErrorFrame(resources$formattedTables$tblBAS,
+        #------If network doesn't have date approximation variables OR -----------------------
+        #------if no _A fields, these are all errors------------------------------------------
+        if (
+          !dateApproxFlag ||
+          (
+            !(exists(paste0(firstDate, projectDef$date_approx), badDates)) && 
+            !(exists(paste0(secondDate, projectDef$date_approx), badDates))
+          )
+        ){
+          errorFrame <- addToErrorFrame(resources$formattedTables[[indexTableName]],
                                         resources$finalGroupChoice,
                                         errorFrame, 
                                         table = resources$uploadedTables[[table2Name]][badDates$recordIndex2,],
@@ -139,9 +168,18 @@ globalDateChecksBefore <- function(errorFrame, resources){
 
 # compare every date field with dates that should be after most dates, exceptions specified
 globalDateChecksAfter <- function(errorFrame, resources){
+  # dateApproxFlag (set in definitions.R, is TRUE if this network has a date approximation 
+  # variable that can accompany date variables
+  if (dateApproxFlag){
+    dateRelatedExtensions <- c(dateExt, projectDef$date_approx)
+  } else {
+    dateRelatedExtensions <- dateExt
+  }
+  
   # find *after* global date fields present in dataset, store in checkTheseGlobalDates
   globalChecks <- globalDateAfterChecks
-  checkTheseGlobalDates <- intersect(names(globalChecks),unlist(resources$tablesAndVariables$matchingColumns, use.names = FALSE))
+  checkTheseGlobalDates <- intersect(names(globalChecks),
+                                     unlist(resources$tablesAndVariables$matchingColumns, use.names = FALSE))
   for (globalDateName in checkTheseGlobalDates){
     print(globalDateName)
     # read in details about this global date field, such as table name, exceptions
@@ -149,9 +187,11 @@ globalDateChecksAfter <- function(errorFrame, resources){
     globalDate <- resources$formattedTables[[dateCheck$table]] %>% 
       filter(!!rlang::sym(globalDateName) != dateIndicatingUnknown) %>%  
       filter(!is.na(!!rlang::sym(globalDateName))) %>% 
-      select("PATIENT", ends_with("_D"), ends_with("D_A"), recordIndex2=recordIndex)
-    # iterate through all uploadedTables that have PATIENT as ID
-    for (tableName in c("tblBAS", resources$tablesAndVariables$tablesToCheckWithPatientID)){
+      select(!!patientVarSym, ends_with(dateRelatedExtensions), 
+             recordIndex2=recordIndex)
+    # REVISIT THIS browser()
+    # iterate through all uploadedTables that have patientVar as ID
+    for (tableName in c(indexTableName, resources$tablesAndVariables$tablesToCheckWithPatientID)){
       # find all of the date fields in current table, except global date field and any exceptions
       variablesInTable <- names(resources$formattedTables[[tableName]])
       # find all the dates in the current table but leave out the globalDate and any exceptions
@@ -159,17 +199,27 @@ globalDateChecksAfter <- function(errorFrame, resources){
                               variablesInTable)
       if (is_empty(dateFields)) next
       dateFields <- dateFields[!(dateFields %in% c(globalDateName, dateCheck$exceptions))]
+      if (is_empty(dateFields)) next
       # find _A columns for only those dates included in dateFields
-      possibleDate_A_fields <- paste0(dateFields, "_A")
-      date_A_fields <-  intersect(variablesInTable[which(endsWith(variablesInTable, "_A"))], possibleDate_A_fields)
+      if (dateApproxFlag){
+        # find _A columns for only those dates included in dateFields
+        possibleDate_A_fields <- paste0(dateFields, projectDef$date_approx)
+        date_A_fields <-  intersect(variablesInTable, 
+                                    possibleDate_A_fields)
+      } else {
+        date_A_fields <- NULL
+      }
       
       # if the current table is different from dateCheck$table, then merge the global date table 
-      # with the current table, columns recordIndex, PATIENT, and all dateFields, merge by PATIENT 
+      # with the current table, columns recordIndex, patientVar, and all dateFields, merge by patientVar 
       # Otherwise, if current table IS the same as dateCheck$table, then include all globalDate and other date fields
       if (dateCheck$table != tableName){
         dateTable <- left_join(globalDate, 
-                               resources$formattedTables[[tableName]][,c("recordIndex","PATIENT",dateFields, date_A_fields)], 
-                               by="PATIENT") %>% rename(recordIndex1=recordIndex)
+                               resources$formattedTables[[tableName]][, c("recordIndex",
+                                                                          patientVar,
+                                                                          dateFields,
+                                                                          date_A_fields)], 
+                               by=patientVar) %>% rename(recordIndex1=recordIndex)
       } else dateTable <- globalDate %>% mutate(recordIndex1=recordIndex2)
       
       secondDate <- globalDateName
@@ -184,9 +234,16 @@ globalDateChecksAfter <- function(errorFrame, resources){
         #--------------------------potential date logic errors were found---------------------
         errorType <-  paste0(secondDate, " before other date") #edited
         message <- paste0(secondDate, " should not be before ", firstDate, ".")
-        #------Simple case first: if no _A fields, these are all errors-----------------------
-        if (!(exists(paste0(firstDate, "_A"), badDates)) && !(exists(paste0(secondDate, "_A"), badDates))){
-          errorFrame <- addToErrorFrame(resources$formattedTables$tblBAS,
+        #------If network doesn't have date approximation variables OR -----------------------
+        #------if no _A fields, these are all errors------------------------------------------
+        if (
+          !dateApproxFlag ||
+          (
+            !(exists(paste0(firstDate, projectDef$date_approx), badDates)) && 
+            !(exists(paste0(secondDate, projectDef$date_approx), badDates))
+          )
+        ){
+          errorFrame <- addToErrorFrame(resources$formattedTables[[indexTableName]],
                                         resources$finalGroupChoice,
                                         errorFrame, 
                                         table = resources$uploadedTables[[table2Name]][badDates$recordIndex2,],
@@ -217,13 +274,13 @@ generalDateOrder <- function(resources, groupVar, errorFrame, firstDate, secondD
   #-------Now add fake _A if one or the other doesn't have _A
   # judy change variable not included to NA
   first_A_flag <- TRUE
-  first_A <- paste0(firstDate, "_A")
+  first_A <- paste0(firstDate, projectDef$date_approx)
   second_A_flag <- TRUE
-  second_A <- paste0(secondDate, "_A")
-  if (!exists(paste0(firstDate, "_A"), jointTable)){
+  second_A <- paste0(secondDate, projectDef$date_approx)
+  if (!exists(paste0(firstDate, projectDef$date_approx), jointTable)){
     first_A_flag <- FALSE
     jointTable[[first_A]] <- "Variable not included in dataset"  ##or NA?
-  } else if (!exists(paste0(secondDate, "_A"), jointTable)){
+  } else if (!exists(paste0(secondDate, projectDef$date_approx), jointTable)){
     second_A_flag <- FALSE
     jointTable[[second_A]] <- "Variable not included in dataset" ##or NA?
   }
@@ -238,7 +295,7 @@ generalDateOrder <- function(resources, groupVar, errorFrame, firstDate, secondD
     # if year check not required, no further checking needed; these are errors
     if (!dateCheck$yearCheck){
       thisCheckBadDates <- datesToCheck
-      errorFrame <- add_A_to_errorFrame(resources$formattedTables$tblBAS, 
+      errorFrame <- add_A_to_errorFrame(resources$formattedTables[[indexTableName]], 
                                         groupVar, errorFrame,
                                         first_A, first_A_flag, 
                                         second_A, second_A_flag, 
@@ -258,7 +315,7 @@ generalDateOrder <- function(resources, groupVar, errorFrame, firstDate, secondD
       ),]
       if (nrow(thisCheckBadDates) == 0) next
       # judy ADD MESSAGE ABOUT YEAR
-      errorFrame <- add_A_to_errorFrame(resources$formattedTables$tblBAS,
+      errorFrame <- add_A_to_errorFrame(resources$formattedTables[[indexTableName]],
                                         groupVar, errorFrame,
                                         first_A, first_A_flag, 
                                         second_A, second_A_flag, 
@@ -283,7 +340,7 @@ generalDateOrder <- function(resources, groupVar, errorFrame, firstDate, secondD
       #Judy  filter(month(.[firstDate]) > month(.[secondDate]))
       if (nrow(thisCheckBadDates) == 0) next
       # judy add message about month
-      errorFrame <- add_A_to_errorFrame(resources$formattedTables$tblBAS,
+      errorFrame <- add_A_to_errorFrame(resources$formattedTables[[indexTableName]],
                                         groupVar, errorFrame,
                                         first_A, first_A_flag, 
                                         second_A, second_A_flag, 
@@ -305,49 +362,98 @@ generalDateOrder <- function(resources, groupVar, errorFrame, firstDate, secondD
 
 ## withinTableDateOrder ----------------------------------------------------------------------
 withinTableDateOrder <- function(errorFrame, resources){
-  tablesToCheck <- intersect(resources$tablesAndVariables$tablesToCheck, names(dateOrders))
-  for (tableName in tablesToCheck){
-    table <- resources$formattedTables[[tableName]]
-    firstDate <- dateOrders[[tableName]][1]
-    secondDate <- dateOrders[[tableName]][2]
-    if (exists(firstDate,table) & exists(secondDate, table)){
-      tableToCheck <- table %>% select(tableIDField[[tableName]],c(firstDate, secondDate),ends_with("D_A"), recordIndex)
-      # badDates <- tableToCheck %>% filter(!is.na(.[firstDate])) %>% filter(!is.na(.[secondDate])) %>% 
-      #   filter(.[firstDate] != dateIndicatingUnknown) %>% filter(.[secondDate] != dateIndicatingUnknown)
-      # badDates$dateDiff <-  badDates[[secondDate]] - badDates[[firstDate]]
-      # badDates <-  badDates %>% filter(dateDiff <0)
+  dateOrderPairs <- list()
+  dataset <- resources$formattedTables
+  currentTables <- names(dataset)
+  for (tableName in currentTables){
+    tableData <- dataset[[tableName]]
+    varsInTable <- names(tableData)
+    # currently allows for only one date order pair per table
+    endDateName <- varsInTable[which(endsWith(varsInTable, edExt))]
+    if (is_empty(endDateName)) next
+    baseDateName <- str_sub(endDateName[[1]], end = -(1 + nchar(edExt)))
+    startDateName <- paste0(baseDateName, sdExt)
+    if (!startDateName %in% varsInTable) next
+    dateOrderPairs[[paste(tableName, baseDateName, sep = "_")]] <- 
+      tibble(tableName = tableName,
+             firstDate = startDateName,
+             secondDate = endDateName)
+  }
+  if (is_empty(dateOrderPairs)) return(errorFrame)
+  dateOrderPairs <- rbindlist(dateOrderPairs, use.names = TRUE)
+  # if dateOrders json had other withintable date order pairs, include here
+  if (!is_empty(dateOrders)){
+    dateOrders <- rbindlist(dateOrders) %>% 
+      filter(tableName %in% resources$tablesAndVariables$tablesToCheck)
+    if (!is_empty(dateOrders)){
+      dateOrderPairs <- rbindlist(list(dateOrderPairs, dateOrders), use.names = TRUE)
+    }
+  }
+  # make sure no duplicate date order checks
+  dateOrderPairs <- unique(dateOrderPairs) 
+  if (is_empty(dateOrderPairs)) return(errorFrame)
+  
+  for (dateCheckNum in 1:nrow(dateOrderPairs)){
+    thisCheck <- dateOrderPairs[dateCheckNum,]
+    tableName <- thisCheck$tableName
+    firstDate <- thisCheck$firstDate
+    secondDate <- thisCheck$secondDate
+    table <- dataset[[tableName]]
+    dateFields <- c(firstDate, secondDate)
+    
+    # if both dates aren't in table, go to next date order pair
+    if (!all(dateFields %in% names(table))) next
+    
+    if (dateApproxFlag){
+      # find _A columns for only those dates included in dateFields
+      possibleDate_A_fields <- paste0(dateFields, projectDef$date_approx)
+      date_A_fields <-  intersect(names(table), 
+                                  possibleDate_A_fields)
+    } else {
+      date_A_fields <- NULL
+    }
+    
+    tableToCheck <- table %>% select(tableIDField[[tableName]],
+                                     dateFields,
+                                     date_A_fields, 
+                                     recordIndex)
+    date1 <- sym(firstDate)
+    date2 <- sym(secondDate)
+    badDates <- tableToCheck %>% filter(!is.na(!!date1)) %>% filter(!is.na(!!date2)) %>% 
+      filter(!!date1 != dateIndicatingUnknown) %>% filter(!!date2 != dateIndicatingUnknown) %>% 
+      filter(!!date2 < !!date1)
+    
+    
+    if (nrow(badDates) == 0) next
+    #--------------------------potential date logic errors were found---------------------
+    errorType <-  paste0(secondDate, " before ", firstDate)
+    message <- paste0(secondDate, " should not be before ", firstDate, " in table ", tableName, ".")
+    #------Simple case first: if no _A fields, these are all errors-----------------------
+    if (
+      !dateApproxFlag ||
+      (
+        !(exists(paste0(firstDate, projectDef$date_approx), badDates)) && 
+        !(exists(paste0(secondDate, projectDef$date_approx), badDates))
+      )
+    ){
+      errorFrame <- addToErrorFrame(resources$formattedTables[[indexTableName]],
+                                    resources$finalGroupChoice,
+                                    errorFrame, 
+                                    table = resources$uploadedTables[[tableName]][badDates$recordIndex,],
+                                    field = secondDate, tableName = tableName,
+                                    errorType = errorType, severity = "Error", message = message,
+                                    error_field2 = firstDate, 
+                                    error2 = as.character(resources$uploadedTables[[tableName]][badDates$recordIndex,firstDate]),
+                                    errorCode = "2.1")
       
-      date1 <- sym(firstDate)
-      date2 <- sym(secondDate)
-      badDates <- tableToCheck %>% filter(!is.na(!!date1)) %>% filter(!is.na(!!date2)) %>% 
-        filter(!!date1 != dateIndicatingUnknown) %>% filter(!!date2 != dateIndicatingUnknown) %>% 
-        filter(!!date2 < !!date1)
-      
-      
-      if (nrow(badDates) == 0) next
-      #--------------------------potential date logic errors were found---------------------
-      errorType <-  paste0(secondDate, " before ", firstDate)
-      message <- paste0(secondDate, " should not be before ", firstDate, " in table ", tableName, ".")
-      #------Simple case first: if no _A fields, these are all errors-----------------------
-      if (!(exists(paste0(firstDate, "_A"), badDates)) && !(exists(paste0(secondDate, "_A"), badDates))){
-        errorFrame <- addToErrorFrame(resources$formattedTables$tblBAS,
-                                      resources$finalGroupChoice,
-                                      errorFrame, 
-                                      table = resources$uploadedTables[[tableName]][badDates$recordIndex,],
-                                      field = secondDate, tableName = tableName,
-                                      errorType = errorType, severity = "Error", message = message,
-                                      error_field2 = firstDate, 
-                                      error2 = as.character(resources$uploadedTables[[tableName]][badDates$recordIndex,firstDate]),
-                                      errorCode = "2.1")
-        
-      } else {
+    } else {
       table <- badDates %>% mutate(recordIndex1 = recordIndex) %>% mutate(recordIndex2 = recordIndex)
       errorFrame <- generalDateOrder(resources, 
                                      resources$finalGroupChoice, errorFrame = errorFrame,
-                       firstDate = firstDate, secondDate = secondDate, 
-                       firstTableName=tableName, secondTableName=tableName, jointTable = table)
-      }
+                                     firstDate = firstDate, secondDate = secondDate, 
+                                     firstTableName=tableName, secondTableName=tableName, jointTable = table)
     }
+    
   }
   return(errorFrame)
 }

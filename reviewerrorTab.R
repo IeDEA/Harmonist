@@ -99,16 +99,18 @@ makeDetailsPretty <- function(df, error_field, linkToDataModel){
     toShow[[identifier]] <- df$id3
     numberOfIdCols <- 3
   }
-  
   lineReturn <- tags$br()
-  if (df$category[[1]] == "Invalid Code"){
-    if (str_detect(df$description[[1]], "Valid codes")){ # then valid codes are listed in description
-      explanation <- "See more details about"
-    } else {
-      explanation <- "See valid codes for"
-      lineReturn <- ""
-    }
-  } else explanation <- "See specifications for"
+  if (networkName == "IeDEA"){
+    if (df$category[[1]] == "Invalid Code"){
+      if (str_detect(df$description[[1]], "Valid codes")){ # then valid codes are listed in description
+        explanation <- "See more details about"
+      } else {
+        explanation <- "See valid codes for"
+        lineReturn <- ""
+      }
+    } else explanation <- "See specifications for"
+  }
+  
   
   # before adding error_field column to data frame to show in modal,
   # make sure that it isn't one of the ID columns already in the "to show"
@@ -116,18 +118,28 @@ makeDetailsPretty <- function(df, error_field, linkToDataModel){
   if (!error_field %in% names(toShow)){
     toShow[[error_field]] <- df$error
   }
+  
+  if (networkName == "IeDEA") {
+    linkToVariableInDataModel <- tags$a(
+      paste0(error_field, " in the IeDEA DES."), 
+      href = linkToDataModel, target="_blank")
+  } else {
+    explanation <- ""
+    linkToVariableInDataModel <- ""
+  }
+  
   # if all errors have identical descriptions put it at top of table
   if (length(unique(df$description)) ==1){
     errorDesc <- tags$em(df$description[[1]], 
                         lineReturn,
                         explanation, 
-                        tags$a(paste0(error_field, " in the IeDEA DES."), href = linkToDataModel, target="_blank")
+                        linkToVariableInDataModel
                         )
   } else {
     # otherwise, put link to DES at top of table but detail in table
     errorDesc <- tags$em(explanation, 
-                        tags$a(paste0(error_field, " in the IeDEA DES"), href = linkToDataModel, target="_blank"),
-                        ". Detailed error descriptions included below:")
+                         linkToVariableInDataModel,
+                        "Detailed error descriptions included below:")
     toShow[["Details"]] <- df$description
   }
   # use error variable names as column names for all variables found in df
@@ -365,7 +377,7 @@ observeEvent(input$yesRestart2,{
   useSampleData(FALSE)
   submitSuccess(NULL)
   tablesAndVariables <- NULL
-  groupByChoice("PROGRAM")
+  groupByChoice(defGroupVar)
   currentGroupSelection(NULL)
   finalGroupChoice(NULL)
   groupByInfo <- NULL
@@ -434,6 +446,8 @@ output$errorSummarySep <- renderUI({
   boxArgs <- lapply(uploadList()$AllDESTables, function(tableName) {
     if (tableName %in% names(errors)){
       summary <- summaryToShow()[[tableName]][,c("Error","Severity", "number", "Option")]
+      summary <- summary %>% 
+        arrange(desc(Severity), desc(number))
 
       numberOfErrors <- sum(summary$number)
       print(numberOfErrors)
@@ -517,10 +531,10 @@ downloadDetailModal <- function(){
         width = 12,
         title = "Options",
         checkboxInput("separateTables", 
-                      "Create separate spreadsheets for each IeDEA table uploaded"),
+                      "Create separate spreadsheets for each table in dataset"),
         uiOutput("programsToIncludeErrorCSV"),
         tags$p("View the ",
-               tags$a("IeDEA Harmonist Error Spreadsheet Guide ", 
+               tags$a("Harmonist Toolkit Error Spreadsheet Guide ", 
                       href = "errorSpreadsheetGuide.pdf", target="_blank"), " for an explanation of the content of the file(s).")
       )
     ),
@@ -533,14 +547,12 @@ downloadDetailModal <- function(){
 
 observeEvent(input$showDownloadDetailModal,{
   lastActivity(Sys.time())
-  # For now, maxErrorsForHTML is set to zero; change to enable html error reports JUDY
   downloadDetailModal()
 
 })
 
 observeEvent(input$step2DownloadDetailModal,{
   lastActivity(Sys.time())
-  # For now, maxErrorsForHTML is set to zero; change to enable html error reports JUDY
   downloadDetailModal()
   
 })

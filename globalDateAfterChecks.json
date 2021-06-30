@@ -1,53 +1,14 @@
 {
-                "DEATH_D":
+                "DEATH_DAT":
                 {"table":"tblLTFU", 
-                "id": "PATIENT",
+                "id": "PERSON_ID",
                 "sign":"after",
                 "exceptions":[
-                  "NEXT_VISIT_D",
-                  "BIRTH_D", 
-                  "DROP_D",
-                  "FATHERDEATH_D",
-                  "MOTHERDEATH_D",
-                  "MUMART_SD",
-                  "MUMART_ED"
+                  "NEXT_VISIT_DAT",
+                  "BIRTH_DAT"
                 ],
                   "specialExceptions":null
-                },
-                "DROP_D":
-                {"table":"tblLTFU", 
-                "id": "PATIENT",
-                "sign":"after",
-                "exceptions":[
-                  "NEXT_VISIT_D",
-                  "L_ALIVE_D",
-                  "BIRTH_D",
-                  "DEATH_D",
-                  "FATHERDEATH_D",
-                  "MOTHERDEATH_D",
-                  "MUMART_SD",
-                  "MUMART_ED"
-                ],
-                 "specialExceptions":null
-
-                },
-               "L_ALIVE_D":
-                {"table":"tblLTFU", 
-                "id": "PATIENT",
-                "sign":"after",
-                "exceptions":[
-                  "NEXT_VISIT_D",
-                  "BIRTH_D",
-                  "DEATH_D",
-                  "FATHERDEATH_D",
-                  "MOTHERDEATH_D",
-					        "DROP_D",
-					        "MUMART_SD",
-					        "MUMART_ED"
-                ],
-                 "specialExceptions":null
                 }
-                
 }
 
 

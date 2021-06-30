@@ -1,9 +1,0 @@
-This sample dataset is provided to allow testing of the IeDEA Harmonist Data Toolkit.
-
-The tables were constructed with random dates and fake PATIENT, PROGRAM, and CENTER variable values. 
-
-Each table includes intentional errors to demonstrate a variety of types of possible dataset inconsistencies detected by the toolkit. 
-
-Feel free to make your own changes to the tables and note the effect on the toolkit output. 
-
-

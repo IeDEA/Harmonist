@@ -4,7 +4,7 @@ createStatsSummary <- function(tableData, reportFormat){
   numberOfVariables <- length(variablesInReport)
   if (numberOfVariables == 0) summaryTableFactors <- NULL
   else {
-    summaryTableFactors <-data.frame(Value = character(),
+    summaryTableFactors <- data.frame(Value = character(),
                                      Count = character(),
                                      Percent = character(),
                                      stringsAsFactors = FALSE)
@@ -65,12 +65,12 @@ createStatsSummary <- function(tableData, reportFormat){
   
   print(paste0("report format ",reportFormat))
   if (reportFormat == "latex"){
-    statsSummaryTable <- kable(summaryTableFactors, longtable=T, booktabs = T, format = reportFormat, 
+    statsSummaryTable <- kbl(summaryTableFactors, longtable=T, booktabs = T, format = reportFormat, 
                                caption  = "Summary statistics from uploaded tables") %>% 
       kableExtra::group_rows(index = numberInGroup) %>% 
       kable_styling(latex_options = c("repeat_header"))
   } else {
-    statsSummaryTable <- kable(summaryTableFactors, longtable=T, format = reportFormat) %>% 
+    statsSummaryTable <- kbl(summaryTableFactors, longtable=T, format = reportFormat) %>% 
       kableExtra::group_rows(index = numberInGroup) %>% 
       kable_styling(latex_options = c("repeat_header"), 
                     bootstrap_options = c("striped","bordered"), full_width = F, position = "left")
@@ -87,65 +87,69 @@ earlyYears <-  function(x){
 # JUDY revisit: what about excluding duplicate entries?
 createVisitStats <- function(tableData, reportFormat){
   visitStats <- NULL
-  visitStats$enrol <- tableData$tblBAS  %>% select(PATIENT, ENROL_D) %>% 
-    filter(ENROL_D != dateIndicatingUnknown) %>%
-    filter(!is.na(ENROL_D)) %>% 
-    filter(ENROL_D <= Sys.Date()) %>% 
-    mutate(Year1 = year(ENROL_D)) %>% 
+  visitStats$enrol <- tableData[[indexTableName]]  %>% select(!!patientVarSym, !!enrolDateVarSym) %>% 
+    filter(!!enrolDateVarSym != dateIndicatingUnknown) %>%
+    filter(!is.na(!!enrolDateVarSym)) %>% 
+    filter(!!enrolDateVarSym <= Sys.Date()) %>% 
+    mutate(Year1 = year(!!enrolDateVarSym)) %>% 
     mutate(Year = earlyYears(Year1)) %>% 
     group_by(Year) %>% dplyr::summarize(Count = n()) %>% mutate(Variable = visitStatsToReport[[1]])
-  if ("tblVIS" %in% tablesAndVariables$tablesToCheck){
-    visitStats$visits <- tableData$tblVIS %>% select(PATIENT, VIS_D) %>% 
-      filter(VIS_D != dateIndicatingUnknown) %>%
-      filter(!is.na(VIS_D)) %>% 
-      distinct(PATIENT, VIS_D, .keep_all = TRUE) %>% 
-      filter(VIS_D <= Sys.Date()) %>% 
-      mutate(Year1 = year(VIS_D)) %>% 
-      mutate(Year = earlyYears(Year1)) %>% 
-      group_by(Year) %>% dplyr::summarize(Count = n()) %>% mutate(Variable = visitStatsToReport[[2]])
-  }
-  if ("tblLTFU" %in% tablesAndVariables$tablesToCheck){
-    if ("DEATH_D" %in% names(tableData$tblLTFU)){
-      visitStats$deaths <- tableData$tblLTFU %>% select(PATIENT, DEATH_D) %>% 
-        filter(DEATH_D != dateIndicatingUnknown) %>% 
-        filter(!is.na(DEATH_D)) %>% 
-        distinct(PATIENT, .keep_all = TRUE) %>% 
-        filter(DEATH_D <= Sys.Date()) %>% 
-        mutate(Year1 = year(DEATH_D)) %>% 
+  if (networkName == "IeDEA"){
+    # NEED TO CUSTOMIZE REPORT FOR OTHER DATA MODELS
+    if ("tblVIS" %in% tablesAndVariables$tablesToCheck){
+      visitStats$visits <- tableData$tblVIS %>% select(PATIENT, VIS_D) %>% 
+        filter(VIS_D != dateIndicatingUnknown) %>%
+        filter(!is.na(VIS_D)) %>% 
+        distinct(PATIENT, VIS_D, .keep_all = TRUE) %>% 
+        filter(VIS_D <= Sys.Date()) %>% 
+        mutate(Year1 = year(VIS_D)) %>% 
         mutate(Year = earlyYears(Year1)) %>% 
-        group_by(Year) %>% dplyr::summarize(Count = n()) %>% mutate(Variable = visitStatsToReport[[3]])
+        group_by(Year) %>% dplyr::summarize(Count = n()) %>% mutate(Variable = visitStatsToReport[[2]])
     }
-    if ("DROP_D" %in% names(tableData$tblLTFU)){
-      if ("DROP_RS" %in% names(tableData$tblLTFU)){
-        visitStats$transferred <-tableData$tblLTFU %>% select(PATIENT, DROP_D, DROP_RS) %>% 
-          filter(DROP_RS %in% codesIndicatingTransfer) %>%  
-          filter(DROP_D != dateIndicatingUnknown) %>%
-          filter(!is.na(DROP_D)) %>% 
-          filter(DROP_D <= Sys.Date()) %>% 
-          mutate(Year1 = year(DROP_D)) %>% 
+    if ("tblLTFU" %in% tablesAndVariables$tablesToCheck){
+      if ("DEATH_D" %in% names(tableData$tblLTFU)){
+        visitStats$deaths <- tableData$tblLTFU %>% select(PATIENT, DEATH_D) %>% 
+          filter(DEATH_D != dateIndicatingUnknown) %>% 
+          filter(!is.na(DEATH_D)) %>% 
+          distinct(PATIENT, .keep_all = TRUE) %>% 
+          filter(DEATH_D <= Sys.Date()) %>% 
+          mutate(Year1 = year(DEATH_D)) %>% 
           mutate(Year = earlyYears(Year1)) %>% 
-          group_by(Year) %>% dplyr::summarize(Count = n()) %>% mutate(Variable = visitStatsToReport[[4]])
+          group_by(Year) %>% dplyr::summarize(Count = n()) %>% mutate(Variable = visitStatsToReport[[3]])
+      }
+      if ("DROP_D" %in% names(tableData$tblLTFU)){
+        if ("DROP_RS" %in% names(tableData$tblLTFU)){
+          visitStats$transferred <-tableData$tblLTFU %>% select(PATIENT, DROP_D, DROP_RS) %>% 
+            filter(DROP_RS %in% codesIndicatingTransfer) %>%  
+            filter(DROP_D != dateIndicatingUnknown) %>%
+            filter(!is.na(DROP_D)) %>% 
+            filter(DROP_D <= Sys.Date()) %>% 
+            mutate(Year1 = year(DROP_D)) %>% 
+            mutate(Year = earlyYears(Year1)) %>% 
+            group_by(Year) %>% dplyr::summarize(Count = n()) %>% mutate(Variable = visitStatsToReport[[4]])
+        }
       }
     }
+    if ("tblLAB_RNA" %in% tablesAndVariables$tablesToCheck){
+      visitStats$viralLoad <- tableData$tblLAB_RNA %>% select(PATIENT, RNA_D) %>% 
+        filter(RNA_D != dateIndicatingUnknown) %>%
+        filter(!is.na(RNA_D)) %>% 
+        filter(RNA_D <= Sys.Date()) %>% 
+        mutate(Year1 = year(RNA_D)) %>% 
+        mutate(Year = earlyYears(Year1)) %>% 
+        group_by(Year) %>% dplyr::summarize(Count = n()) %>% mutate(Variable = visitStatsToReport[[5]])
+    }
+    if ("tblLAB_CD4" %in% tablesAndVariables$tablesToCheck){
+      visitStats$CD4 <- tableData$tblLAB_CD4 %>% select(PATIENT, CD4_D) %>% 
+        filter(CD4_D != dateIndicatingUnknown) %>%
+        filter(!is.na(CD4_D)) %>% 
+        filter(CD4_D <= Sys.Date()) %>% 
+        mutate(Year1 = year(CD4_D)) %>% 
+        mutate(Year = earlyYears(Year1)) %>% 
+        group_by(Year) %>% dplyr::summarize(Count = n()) %>% mutate(Variable = visitStatsToReport[[6]])
+    }
   }
-  if ("tblLAB_RNA" %in% tablesAndVariables$tablesToCheck){
-    visitStats$viralLoad <- tableData$tblLAB_RNA %>% select(PATIENT, RNA_D) %>% 
-      filter(RNA_D != dateIndicatingUnknown) %>%
-      filter(!is.na(RNA_D)) %>% 
-      filter(RNA_D <= Sys.Date()) %>% 
-      mutate(Year1 = year(RNA_D)) %>% 
-      mutate(Year = earlyYears(Year1)) %>% 
-      group_by(Year) %>% dplyr::summarize(Count = n()) %>% mutate(Variable = visitStatsToReport[[5]])
-  }
-  if ("tblLAB_CD4" %in% tablesAndVariables$tablesToCheck){
-    visitStats$CD4 <- tableData$tblLAB_CD4 %>% select(PATIENT, CD4_D) %>% 
-      filter(CD4_D != dateIndicatingUnknown) %>%
-      filter(!is.na(CD4_D)) %>% 
-      filter(CD4_D <= Sys.Date()) %>% 
-      mutate(Year1 = year(CD4_D)) %>% 
-      mutate(Year = earlyYears(Year1)) %>% 
-      group_by(Year) %>% dplyr::summarize(Count = n()) %>% mutate(Variable = visitStatsToReport[[6]])
-  }
+
 
   allData <- rbindlist(visitStats, use.names = TRUE, fill = TRUE)
   # make sure recent years all filled in, even if 0
@@ -172,11 +176,11 @@ createVisitStats <- function(tableData, reportFormat){
 
   print(paste0("report format ",reportFormat))
   if (reportFormat == "latex"){
-    visitSummaryTable <- kable(visitStatsOut, longtable=T, booktabs = T, format = reportFormat, 
+    visitSummaryTable <- kbl(visitStatsOut, longtable=T, booktabs = T, format = reportFormat, 
                                caption  = "Number of observations per year") %>% 
       kable_styling(latex_options = c("repeat_header")) 
   } else {
-    visitSummaryTable <- kable(visitStatsOut, longtable=T, format = reportFormat,
+    visitSummaryTable <- kbl(visitStatsOut, longtable=T, format = reportFormat,
                                caption  = "Number of observations per year") %>% 
       kable_styling(latex_options = c("repeat_header"), 
                     bootstrap_options = c("striped","bordered"), full_width = F, position = "left") 
@@ -317,12 +321,11 @@ generateHistogramGrid <- function(tableData, groupName, dateFields){
 generateHistogramsAllPrograms <- reactive({
   groupVar <- finalGroupChoice()
   groupVarSE <- rlang::sym(groupVar)
-  groups <- unique(na.omit(formattedTables()$tblBAS[[groupVar]]))
+  groups <- unique(na.omit(formattedTables()[[indexTableName]][[groupVar]]))
   groups <- groups[!is_blank_or_NA_elements(groups)]
   
   datesToInclude <- intersect(desiredPlots, unlist(tablesAndVariables$matchingColumns))
   tablesToInclude <- intersect(desiredTables, names(formattedTables()))
-  
   plotList <- NULL
   for (groupName in groups){
     tableData <- lapply(formattedTables()[tablesToInclude], 
@@ -350,13 +353,13 @@ generateQualitySummaryPlots <- function(programSummary, programName){
       toShow <- toShow %>% select(Table = table, Variable = variable, number, percent) %>% 
         mutate("Count (%)" = paste0(number, "(",percent,")")) %>% 
         select(-number, -percent)
-    
+      
       if (input$reportType == "html"){
-        missingAndUnknownPlot <- kable(toShow, format = "html", caption = tableTitle) %>% 
-         kable_styling("bordered", full_width = FALSE, position = "left") 
+        missingAndUnknownPlot <- kbl(toShow, format = "html", caption = tableTitle) %>% 
+          kable_styling("bordered", full_width = FALSE, position = "left") 
       }
       if (input$reportType == "pdf") {
-        missingAndUnknownPlot <- kable(toShow, caption = tableTitle, format = "latex", longtable = T, booktabs = T) %>% 
+        missingAndUnknownPlot <- kbl(toShow, caption = tableTitle, format = "latex", longtable = T, booktabs = T) %>% 
           kable_styling(latex_options = c("repeat_header"))
       }
     }
@@ -374,13 +377,21 @@ generateQualitySummaryPlots <- function(programSummary, programName){
         coord_flip(ylim = c(0,100))
     }
   } 
-  if (is.null(programSummary$appearanceSummary)) appearancePlot <- NULL
-  else {
+  
+  if (is.null(programSummary$appearanceSummary)){
+    appearancePlot <- NULL
+  } else {
     numAppearances <- nrow(programSummary$appearanceSummary)
-    if (numAppearances == 0) appearancePlot <- NULL
-    if (numAppearances == 1) appearancePlot <- NULL
-    if (numAppearances > 1){
-      plotTitle <- "% Patients from tblBAS Included in Other Tables"
+    if (numAppearances < 2){
+      appearancePlot <- NULL
+    } else if ("message" %in% names(programSummary$appearanceSummary)){
+      appearancePlot <- programSummary$appearanceSummary$message[[1]]
+    } else {
+      plotTitle <- paste0(
+        "% Patients from ",
+        indexTableName,
+        " Included in Other Tables"
+      )
       
       appearancePlot <- ggplot(data = programSummary$appearanceSummary, 
                                aes(x= reorder(table,-percent), y=percent)) + 
@@ -388,13 +399,15 @@ generateQualitySummaryPlots <- function(programSummary, programName){
         labs(title=plotTitle) +
         theme(legend.position="none") + 
         xlab("Table Name") +
-        ylab("% patients from tblBAS included") +
+        ylab(paste0("% patients from ", 
+                    indexTableName,
+                    " included")) +
         coord_flip(ylim = c(0, 100))
     }
   }
-  
-  return(list(missingAndUnknownPlot = missingAndUnknownPlot,
-              appearancePlot = appearancePlot))
+
+return(list(missingAndUnknownPlot = missingAndUnknownPlot,
+            appearancePlot = appearancePlot))
 }
 
 # generateErrorSummaryTables: errorSummary dataframe must have table and errorType columns
@@ -416,15 +429,14 @@ generateErrorSummaryTables <- function(errorSummary, caption = "", reportFormat,
   }
   if (reportFormat =="pdf"){ reportFormat <- "latex"}
   if (reportFormat == "latex"){
-    errorSumTable <- kable(errorSummaryShow, longtable=T, booktabs = T, format = reportFormat, 
+    errorSumTable <- kbl(errorSummaryShow, longtable=T, booktabs = T, format = reportFormat, 
                            caption  = caption) %>% 
       kableExtra::group_rows(index = groupRows) %>% 
       kable_styling(latex_options = c("repeat_header"))
   } else { # for html caption is blank; caption in headings in rmd so that navigation enabled
-    errorSumTable <- kable(errorSummaryShow, longtable=T, format = reportFormat) %>% 
+    errorSumTable <- kbl(errorSummaryShow, longtable=T, format = reportFormat) %>% 
       kableExtra::group_rows(index = groupRows) %>% 
-      kable_styling(latex_options = c("repeat_header"), 
-                    bootstrap_options = c("striped","bordered"), full_width = F, position = "left") 
+      kable_styling(bootstrap_options = c("striped","bordered"), full_width = F, position = "left") 
   }
   return(errorSumTable)
 }
@@ -437,19 +449,19 @@ generateDatasetSummary <- function(tableData, reportFormat){
 
   tableTitle <- "Table Summary "
   
-  totalPatients <- nrow(tableData$tblBAS)
+  totalPatients <- nrow(tableData[[indexTableName]])
   #compile list of valid PATIENT ids; only include those in tableSummary
-  validPatients <- tableData$tblBAS$PATIENT
+  validPatients <- tableData[[indexTableName]][[patientVar]]
   # set up tableSummary data frame to include counts by age Group
-  ageGroupLabels <- levels(tableData$tblBAS$ageGroup)
+  ageGroupLabels <- levels(tableData[[indexTableName]][["ageGroup"]])
   colNames <- c("Table","Records","Patients", ageGroupLabels)
   tableSummary <- data.frame(matrix(vector(),ncol=length(colNames)))
   colnames(tableSummary) <-colNames
   
   row <- 1
-  for (tableName in c("tblBAS", tablesAndVariables$tablesToCheckWithPatientID)){
+  for (tableName in c(indexTableName, tablesAndVariables$tablesToCheckWithPatientID)){
     numrecords <- nrow(tableData[[tableName]])
-    tableWithValidPatients <- tableData[[tableName]] %>% filter(PATIENT %in% validPatients)
+    tableWithValidPatients <- tableData[[tableName]] %>% filter(!!patientVarSym %in% validPatients)
     # first check to make sure this table has data
     if (numrecords == 0){
       results <- data.frame(
@@ -460,7 +472,7 @@ generateDatasetSummary <- function(tableData, reportFormat){
       )
     
     }
-    # check to see if the patients in this table are actually included in tblBAS (otherwise don't include)
+    # check to see if the patients in this table are actually included in indexTable (otherwise don't include)
     else if (nrow(tableWithValidPatients) == 0){ #(!any(validPatients %in% tableData[[tableName]][["PATIENT"]])){
       results <- data.frame(
         Table = tableName,
@@ -470,11 +482,12 @@ generateDatasetSummary <- function(tableData, reportFormat){
       )
     } else { 
     cat("in dataset summary loop", tableName, "\n", sep = "", file = stderr())
-    results <- tableWithValidPatients %>% select(PATIENT, ageGroup) %>% 
+    results <- tableWithValidPatients %>% select(!!patientVarSym, ageGroup) %>% 
       mutate(Table = tableName) %>% mutate(Records = numrecords) %>% 
-      distinct(PATIENT,.keep_all = TRUE) %>% mutate(Patients = n()) %>%
+      distinct(!!patientVarSym,.keep_all = TRUE) %>% mutate(Patients = n()) %>%
       filter(!is.na(ageGroup)) %>% 
-      group_by(Table, Records, Patients, ageGroup) %>% summarise(number = n()) %>% spread(ageGroup, number)
+      group_by(Table, Records, Patients, ageGroup) %>% summarise(number = n()) %>% 
+      spread(ageGroup, number)
     }
     results <- as.data.frame(results, stringsAsFactors = FALSE)
  
@@ -511,18 +524,18 @@ generateDatasetSummary <- function(tableData, reportFormat){
   if (reportFormat =="pdf"){ reportFormat <- "latex"}
   
   if (reportFormat == "html"){
-    tableSummaryKable <- kable(tableSummary, format = "html", caption = tableTitle) %>% 
+    tableSummaryKable <- kbl(tableSummary, format = "html", caption = tableTitle) %>% 
       kable_styling("bordered", full_width = FALSE, position = "left") %>% 
       add_header_above(c(" " = 3, "Age at Enrollment" = length(ageGroupLabels)))
   }
   else {
-    tableSummaryKable <- kable(tableSummary, format = "latex", longtable = T, booktabs = T, caption = tableTitle) %>% 
+    tableSummaryKable <- kbl(tableSummary, format = "latex", longtable = T, booktabs = T, caption = tableTitle) %>% 
       add_header_above(c(" " = 3, "Age at Enrollment" = length(ageGroupLabels)))
                             #   caption = tableTitle, longtable = T, booktabs = T) %>% 
     #  add_header_above(c(" " = 3, "Age at Enrollment" = length(ageGroupLabels))) #%>% 
      # kable_styling(latex_options = c("repeat_header"))
   }
-# browser() 
+
   statsSummaryTable <- createStatsSummary(tableData, reportFormat)
   visitStatsSummaryTable <- createVisitStats(tableData, reportFormat)
 #  otherStatsTable <- createOtherStats(tableData, reportFormat)
@@ -576,7 +589,20 @@ summarizeForOneGroup <- function(groupName, tableData){
     programMissingAndUnknown <- errorTable()$missingAndUnknownByGroup %>% filter((!!groupVarSE) == groupName) %>% select(-(!!groupVarSE))
   } else programMissingAndUnknown <- NULL
   if (!is.null(errorTable()$appearanceSummary)){
-    programAppearance <- errorTable()$appearanceSummary %>% filter((!!groupVarSE) == groupName) %>% select(-(!!groupVarSE))
+    programAppearance <- errorTable()$appearanceSummary %>% 
+      filter((!!groupVarSE) == groupName) %>% 
+      select(-(!!groupVarSE))
+    if (all(programAppearance$percent == 100)){
+      programAppearance$message <- paste0(
+        "Every patient enrolled in ",
+        groupName,
+        " in ",
+        indexTableName,
+        " has records in ",
+        knitr::combine_words(sort(unique(programAppearance$table))),
+        "."
+      )
+    }
   } else programAppearance <- NULL
   return(list("errorSummaries" = programErrorSummaries, 
               "missingSummary" = programMissing,
@@ -638,8 +664,23 @@ createReport <- function(file, reportType = c("PDF", "html"),
   tableOfVariables <- tablesAndVariables$details$variableSummaryToDisplay
   # JUDY edit the line below if you want colored badges in the reports along with table names
   tableOfVariables$Table <- removeHTML(tableOfVariables$Table)
-  tableOfVariables$`IeDEA DES Variables` <- removeHTML(tableOfVariables$`IeDEA DES Variables`)
+  
+  # the 3rd column is titled with the network name and data model name
+  tableOfVariables[[3]] <- removeHTML(tableOfVariables[[3]])
 
+    # if every patient in the index table is found in the other patient-linked
+  # tables, no need to show an all-green heat map, just a statement:
+  appearanceSummary <- errorTable()$appearanceSummary
+  if (all(appearanceSummary$percent == 100)){
+    appearanceSummary$message <- paste0(
+      "Every patient listed in ",
+      indexTableName,
+      " has records in ",
+      knitr::combine_words(sort(unique(appearanceSummary$table))),
+      "."
+    )
+  }
+  
   params <- list(
     allTables = formattedTables(),
     extraFiles = uploadList()$ExtraFiles,
@@ -651,7 +692,7 @@ createReport <- function(file, reportType = c("PDF", "html"),
     missingSummary = errorTable()$missingSummary,
     missingSummaryByGroup = errorTable()$missingSummaryByGroup,
     unknownCodeSummaryByGroup = errorTable()$unknownCodeSummaryByGroup,
-    appearanceSummary = errorTable()$appearanceSummary,
+    appearanceSummary = appearanceSummary,
     errorTable = errorTable(),
     datasetDesc = input$datasetDesc,
     plotList = plotList,
@@ -664,7 +705,10 @@ createReport <- function(file, reportType = c("PDF", "html"),
     programsInReport = input$programsInReport,
     reportOutput = paste0(reportType,"_document"),
     errorSummaryTables = errorSummaryTables,
-    groupVar = finalGroupChoice()
+    groupVar = finalGroupChoice(),
+    indexTableName = indexTableName,
+    patientVar = patientVar,
+    patientVarSym = patientVarSym
   )
   tempReportName <-  paste0("report", reportType,".rmd")
   dir <- dirname(file)
@@ -674,7 +718,6 @@ createReport <- function(file, reportType = c("PDF", "html"),
   file.copy("iedeaLogoSmall.png", tempImage, overwrite = TRUE)
   file.copy(tempReportName, tempReport, overwrite = TRUE)
   knitr::knit_meta(class=NULL, clean = TRUE)
-  
   rmarkdown::render(tempReport, output_file = file,
                     params = params,
                     envir = new.env(parent = globalenv())
@@ -754,8 +797,6 @@ createReportOneProgram <- function(file, input, groupName){
                                "warnings" = warnSumTable,
                                "badCodes" = badCodeSumTable)
     
-    
-    
     datasetQuality <- generateQualitySummaryPlots(programSummary, groupName)
   } else {
     programSummary <- NULL
@@ -764,7 +805,6 @@ createReportOneProgram <- function(file, input, groupName){
   }
   
   datasetSummary <- generateDatasetSummary(tableData, reportFormat = tolower(reportType))
-
   filename <- paste0("reportOneProgram",toupper(reportType),".rmd")
   params <- list(
     allTables = tableData,
@@ -841,7 +881,7 @@ output$reportZipAll <- downloadHandler(
   content = function(file) {
     reportMessage()
     groupVar <- finalGroupChoice()
-    groupNames <- unique(na.omit(formattedTables()$tblBAS[[groupVar]]))
+    groupNames <- unique(na.omit(formattedTables()[[indexTableName]][[groupVar]]))
     groupNames <- groupNames[!is_blank_or_NA_elements(groupNames)]
     groupNames <- groupNames[groupNames != "Missing"]
     for (groupName in groupNames){

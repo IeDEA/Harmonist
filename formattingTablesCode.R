@@ -1,181 +1,90 @@
-age <- function(dob, age.day = today(), units = "years", floor = TRUE) {
+calcAge <- function(dob, age.day = today(), units = "years", floor = TRUE) {
   calc.age = interval(dob, age.day) / duration(num = 1, units = units)
   if (floor) return(as.integer(floor(calc.age)))
   return(calc.age)
 }
 
-addFirstCDC_STAGE <- function(formattedTableData){
-  tblVIS <- formattedTableData$tblVIS
-  visitData <- tblVIS %>% select(PATIENT, VIS_D, CDC_STAGE) %>% 
-    filter(!is.na(CDC_STAGE)) %>% 
-    group_by(PATIENT) %>% 
-    dplyr::summarize(first_CDC_VIS_D = min(VIS_D, na.rm = TRUE)) %>% 
-    left_join(tblVIS[,c("PATIENT","VIS_D", "CDC_STAGE")], by = c("PATIENT"="PATIENT","first_CDC_VIS_D" ="VIS_D")) %>% 
-    group_by(PATIENT, first_CDC_VIS_D) %>% 
-    summarise(first_CDC_STAGE = max(CDC_STAGE))
-  
-  formattedTableData$tblBAS <- left_join(formattedTableData$tblBAS, 
-                                         visitData[,c("PATIENT","first_CDC_STAGE")], by = "PATIENT")
-  
-  return(formattedTableData)
-}
-
-addFirstWHO_STAGE <- function(formattedTableData){
-  tblVIS <- formattedTableData$tblVIS
-  visitData <- tblVIS %>% select(PATIENT, VIS_D, WHO_STAGE) %>% 
-    filter(!is.na(WHO_STAGE)) %>% 
-    group_by(PATIENT) %>% 
-    dplyr::summarize(first_WHO_VIS_D = min(VIS_D, na.rm = TRUE)) %>% 
-    left_join(tblVIS[,c("PATIENT","VIS_D", "WHO_STAGE")], by = c("PATIENT"="PATIENT","first_WHO_VIS_D" ="VIS_D")) %>% 
-    group_by(PATIENT, first_WHO_VIS_D) %>% 
-    summarise(first_WHO_STAGE = max(WHO_STAGE))
-  
-  formattedTableData$tblBAS <- left_join(formattedTableData$tblBAS, 
-                                         visitData[,c("PATIENT","first_WHO_STAGE")], by = "PATIENT")
-  
-  return(formattedTableData)
-}
-
-addNumberOfVisits <- function(formattedTableData){
-  tblVIS <- formattedTableData$tblVIS
-  visitData <- tblVIS %>% group_by(PATIENT) %>%
-    dplyr::summarize(numVisits = n()) 
-  formattedTableData$tblBAS <- formattedTableData$tblBAS  %>%  left_join(visitData, by = "PATIENT")
-  return(formattedTableData)
-}
-
-countNonNA <- function(vector){
-  sum(!is.na(vector))
-}
-
-addVisitDetails <- function(formattedTableData){
-  tblVIS <- formattedTableData$tblVIS
-  visitFields <- c("HEIGH", "WEIGH", "CDC_STAGE","WHO_STAGE")
-  resultNames <- c("numHeights","numWeights","numCDC_STAGE","numWHO_STAGE")
-  resultNames <- resultNames[visitFields %in% names(tblVIS)]
-  visitFields <- visitFields[visitFields %in% names(tblVIS)]
-  
-  visitData <- tblVIS %>% select(c("PATIENT", visitFields)) %>%  group_by(PATIENT) %>%
-         dplyr::summarise_all(countNonNA) %>%  setNames(c("PATIENT",resultNames)) ####HERE HERE HERE HERE
-  formattedTableData$tblBAS <- formattedTableData$tblBAS  %>%  left_join(visitData, by = "PATIENT")
-  return(formattedTableData)
-}
-
-addNumberOfCD4 <- function(formattedTableData){
-  tblCD4 <- formattedTableData$tblLAB_CD4
-  visitData <- tblCD4 %>% filter(!is.na(CD4_V)) %>% group_by(PATIENT) %>%
-    dplyr::summarize(numCD4 = n()) 
-  formattedTableData$tblBAS <- formattedTableData$tblBAS  %>%  left_join(visitData, by = "PATIENT")
-  return(formattedTableData)
-}
-
-addVisitStats <- function(formattedTables){
-  if ("tblVIS" %in% names(formattedTables)){
-    if (any(!is.na(formattedTables$tblVIS$WHO_STAGE))){
-      print("adding who")
-      formattedTables <- addFirstWHO_STAGE(formattedTables)
-    }
-    if (any(!is.na(formattedTables$tblVIS$CDC_STAGE))){
-      print("adding cdc")
-      
-      formattedTables <- addFirstCDC_STAGE(formattedTables)
-    }
-    print("adding num visits")
-    
-    formattedTables <- addNumberOfVisits(formattedTables)
-    print("addingVisitdetails")
-    formattedTables <- addVisitDetails(formattedTables)
-  }
-  print("about to add cd4")
-  if ("tblLAB_CD4" %in% names(formattedTables)){
-    if ("CD4_v" %in% names(formattedTables$tblLAB_CD4)){
-      print("adding numcd4")
-      
-      formattedTables <- addNumberOfCD4(formattedTables)
-    }
-  }
-  return(formattedTables)
-}
-
-
 addAges <- function(formattedTableData){
-  if (exists("ENROL_D", formattedTableData$tblBAS)){
-    formattedTableData$tblBAS$ageAtEnrol <- age(formattedTableData$tblBAS$BIRTH_D, formattedTableData$tblBAS$ENROL_D)
-  } else formattedTableData$tblBAS$ageAtEnrol <- NA
+  if (exists(ageDateVar, formattedTableData[[indexTableName]])){
+    formattedTableData[[indexTableName]]$age <- calcAge(formattedTableData[[indexTableName]][[birthDateVar]], 
+                                                          formattedTableData[[indexTableName]][[ageDateVar]])
+  } else formattedTableData[[indexTableName]]$age <- NA
 
   return(formattedTableData)
 }
 
-
-addAgeGroupAndGroup <- function(formattedTableData, groupBy){
-  formattedTableData$tblBAS$ageGroup <- NA
+addAgeGroupAndGroup <- function(formattedTableData, groupByVar){
+  formattedTableData[[indexTableName]]$ageGroup <- NA
   ageGroupLevels <- names(ageGroups)
   for (ageGroup in ageGroupLevels){
-    formattedTableData$tblBAS[which((formattedTableData$tblBAS$ageAtEnrol >= ageGroups[[ageGroup]]$lower) &
-                                    (formattedTableData$tblBAS$ageAtEnrol < ageGroups[[ageGroup]]$upper + 1) ),
+    formattedTableData[[indexTableName]][which((formattedTableData[[indexTableName]]$age >= ageGroups[[ageGroup]]$lower) &
+                                    (formattedTableData[[indexTableName]]$age < ageGroups[[ageGroup]]$upper + 1) ),
                               "ageGroup"] <- ageGroup
   }
-  if (any(is.na(formattedTableData$tblBAS$ageGroup))){
-      formattedTableData$tblBAS[which(is.na(formattedTableData$tblBAS$ageGroup)),"ageGroup"] <- "Unknown" 
+  if (any(is.na(formattedTableData[[indexTableName]]$ageGroup))){
+      formattedTableData[[indexTableName]][which(is.na(formattedTableData[[indexTableName]]$ageGroup)),"ageGroup"] <- "Unknown" 
       ageGroupLevels <- c(ageGroupLevels, "Unknown")
   }
 
-  formattedTableData$tblBAS$ageGroup <- factor(formattedTableData$tblBAS$ageGroup, levels = ageGroupLevels)
+  formattedTableData[[indexTableName]]$ageGroup <- factor(formattedTableData[[indexTableName]]$ageGroup, levels = ageGroupLevels)
   
-  #groupLevels <- sort(unique(formattedTableData$tblBAS[[groupBy]]))
-  #formattedTableData$tblBAS[[groupBy]] <- factor(formattedTableData$tblBAS[[groupBy]],
+  #groupLevels <- sort(unique(formattedTableData[[indexTableName]][[groupByVar]]))
+  #formattedTableData[[indexTableName]][[groupByVar]] <- factor(formattedTableData[[indexTableName]][[groupByVar]],
   #                                               levels = groupLevels)
 
-  # if any tblBAS records is missing PROGRAM or group, add it as "Missing"
-  blankPROGRAM <- is_blank_or_NA_elements(formattedTableData$tblBAS$PROGRAM)
-  blankGroup <- is_blank_or_NA_elements(formattedTableData$tblBAS[[groupBy]])
-  if (any(blankPROGRAM)){
-    formattedTableData$tblBAS[which(blankPROGRAM), "PROGRAM"] <- "Missing"
+  # if any indexTableName records is missing defGroupVar or group, add it as "Missing"
+  blankDefGroup <- is_blank_or_NA_elements(formattedTableData[[indexTableName]][[defGroupVar]])
+  blankGroup <- is_blank_or_NA_elements(formattedTableData[[indexTableName]][[groupByVar]])
+  if (any(blankDefGroup)){
+    formattedTableData[[indexTableName]][which(blankDefGroup), defGroupVar] <- "Missing"
   }
   if (any(blankGroup)){
-    formattedTableData$tblBAS[which(blankGroup), groupBy] <- "Missing"
+    formattedTableData[[indexTableName]][which(blankGroup), groupByVar] <- "Missing"
   }
   for (tableName in tablesAndVariables$tablesToCheckWithPatientID){
     currentTable <- formattedTableData[[tableName]]
     toJoinFromTable <- names(currentTable)
-    # no need to add PROGRAM or groupBy from tblBAS if already in table
-    #if (groupBy %in% names(formattedTableData[[tableName]])) browser() # what if a table has a different group value
-    toJoinFromBAS <- c("PATIENT", setdiff(c("PROGRAM", groupBy), toJoinFromTable), "ageGroup")
+    # no need to add defGroupVar or groupByVar from indexTableName if already in table
+    #if (groupByVar %in% names(formattedTableData[[tableName]])) browser() # what if a table has a different group value
+    toJoinFromIndex <- c(patientVar, setdiff(c(defGroupVar, groupByVar), toJoinFromTable), "ageGroup")
     gc()
     formattedTableData[[tableName]] <- left_join(currentTable[,toJoinFromTable, drop = FALSE], 
-                                                  formattedTableData$tblBAS[, toJoinFromBAS, drop = FALSE],
-                                                  by = "PATIENT")
-    # if any PATIENTS weren't found in tblBAS, the ageGroup = unknown. Add this factor level
+                                                  formattedTableData[[indexTableName]][, toJoinFromIndex, drop = FALSE],
+                                                  by = patientVar)
+    # if any patients weren't found in indexTableName, the ageGroup = unknown. Add this factor level
     if (any(is.na(formattedTableData[[tableName]][["ageGroup"]]))){
       cat("replacing NA ages in", tableName, "with Unknown label", "\n", sep = " ", file = stderr())
       formattedTableData[[tableName]][["ageGroup"]] <- forcats::fct_explicit_na(formattedTableData[[tableName]][["ageGroup"]], "Unknown")
     }
 
-    if (any(is.na(formattedTableData[[tableName]][[groupBy]]))){
-      if (is.factor(formattedTableData[[tableName]][[groupBy]])){
-        formattedTableData[[tableName]][[groupBy]] <- fct_explicit_na(formattedTableData[[tableName]][[groupBy]], na_level = "Unknown")
+    if (any(is.na(formattedTableData[[tableName]][[groupByVar]]))){
+      if (is.factor(formattedTableData[[tableName]][[groupByVar]])){
+        formattedTableData[[tableName]][[groupByVar]] <- fct_explicit_na(formattedTableData[[tableName]][[groupByVar]], na_level = "Unknown")
       } else {
-        formattedTableData[[tableName]][[groupBy]] <- replace_na(formattedTableData[[tableName]][[groupBy]], "Unknown")
+        formattedTableData[[tableName]][[groupByVar]] <- replace_na(formattedTableData[[tableName]][[groupByVar]], "Unknown")
       }
     }
     rm(currentTable)
   }
   
-  if ("tblLAB_RES" %in% tablesAndVariables$tablesToCheck){
-    mainREStable <- formattedTableData$tblLAB_RES[, unique(c("TEST_ID","PATIENT","PROGRAM", groupBy))] %>% 
-      distinct(TEST_ID, .keep_all = TRUE) # this is to prevent rows being added during left_join but may eliminate some entries. unique() is to handle case when groupBy == PROGRAM
+  ##################################################################################
+  # unique to IeDEA ################################################################
+  if (networkName == "IeDEA" && "tblLAB_RES" %in% tablesAndVariables$tablesToCheck){
+    mainREStable <- formattedTableData$tblLAB_RES[, unique(c("TEST_ID",patientVar,defGroupVar, groupByVar))] %>% 
+      distinct(TEST_ID, .keep_all = TRUE) # this is to prevent rows being added during left_join but may eliminate some entries. unique() is to handle case when groupByVar == defGroupVar
     for (tableRESname in intersect(c("tblLAB_RES_LVL_2","tblLAB_RES_LVL_3"),names(formattedTableData))){
       formattedTableData[[tableRESname]] <- left_join(formattedTableData[[tableRESname]],
                                                       mainREStable, 
                                                       by = c("TEST_ID"))
     }
   }
+  
   # determine which tables have not been linked to a group, such as pregnancy-related tables
   # For now, link those to group "Unknown"
-  result <- lapply(formattedTableData, function(df) !exists(groupBy, df))
+  result <- lapply(formattedTableData, function(df) !exists(groupByVar, df))
   tablesWithNoGroup <- names(which(unlist(result)))
   for (tableName in tablesWithNoGroup){
-    formattedTableData[[tableName]][,unique(c("PROGRAM", groupBy))] <- "Not assigned"
+    formattedTableData[[tableName]][,unique(c(defGroupVar, groupByVar))] <- "Not assigned"
   }
   return(formattedTableData)
 }
@@ -183,7 +92,7 @@ addAgeGroupAndGroup <- function(formattedTableData, groupBy){
 # forceModeTables ---------------------------------------------
 # This function forces the variable types to conform with the DES, converts invalid codes to NA, 
 # and ultimately saves the formatted data as formattedTables()
-forceModeTables <- function(groupBy, uploadedTables){
+forceModeTables <- function(groupByVar, uploadedTables){
   formattedTables <- list()
   for (tableName in tablesAndVariables$tablesToCheck){
     updateModal(message = paste0("Formatting ", tableName),
@@ -195,15 +104,18 @@ forceModeTables <- function(groupBy, uploadedTables){
     variableDefs <- get(tableName, tableDef)
     variableNames <- intersect(names(tableDef[[tableName]]$variables),
                                names(uploadedTables[[tableName]]))
-    # If CENTER supplied in tblBAS, keep it in formattedTables even though it's not included in tblBAS
-    # EDIT this if CENTER is added as optional variable in DES
 
-    if ((tableName == "tblBAS")){
-      formattedTables[[tableName]] <- uploadedTables[[tableName]][, unique(c(variableNames, groupBy)), drop = FALSE]
+    # if the current table is indexTable
+
+    if ((tableName == indexTableName)){
+      print("1")
+      formattedTables[[tableName]] <- uploadedTables[[tableName]][, unique(c(variableNames, groupByVar)), drop = FALSE]
+      print("2")
+      
     } else formattedTables[[tableName]] <- uploadedTables[[tableName]][, variableNames, drop = FALSE]
 
-    if (exists("PATIENT", formattedTables[[tableName]])){ # & 
-      formattedTables[[tableName]][["PATIENT"]] <- as.character(formattedTables[[tableName]][["PATIENT"]])
+    if (exists(patientVar, formattedTables[[tableName]])){ # & 
+      formattedTables[[tableName]][[patientVar]] <- as.character(formattedTables[[tableName]][[patientVar]])
     }
    
     for (variableName in variableNames){
@@ -219,12 +131,14 @@ forceModeTables <- function(groupBy, uploadedTables){
       if (variableDefs$variables[[variableName]]$has_codes == "Y"){
         codeFormat <- variableDefs$variables[[variableName]]$data_format
         codeIndex <- as.numeric(variableDefs$variables[[variableName]]$code_list_ref)
-        codeList <- codes[[codeIndex]]
+        codeList <- codes[[as.character(codeIndex)]]
         validCodes <- names(codeList)
         codeLabels <- unlist(codeList, use.names = FALSE)
         
+        ##########################################################################
+        # unique to IeDEA
         # if this variable is units, remove the html codes for superscripts...
-        if (endsWith(variableName,"_U")) codeLabels <- removeHTML(codeLabels)
+        if (networkName == "IeDEA" && endsWith(variableName,"_U")) codeLabels <- removeHTML(codeLabels)
         
         # NUMERIC CODES FIRST ---------------------------------------------------------------
         # if the code list is numeric, convert column to numeric
@@ -346,8 +260,8 @@ forceModeTables <- function(groupBy, uploadedTables){
         }
         formattedTables[[tableName]][[variableName]] <- factor(formattedTables[[tableName]][[variableName]])
       }
-      #next, replace blank PROGRAM/Group entries with NA to facilitate reporting by program
-      else if (variableName == groupBy){
+      #next, replace blank defGroupVar/Group entries with NA to facilitate reporting by program
+      else if (variableName == groupByVar){
         if (columnClass != "character") {
           formattedTables[[tableName]][[variableName]] <- 
             as.character(formattedTables[[tableName]][[variableName]])
@@ -364,12 +278,11 @@ forceModeTables <- function(groupBy, uploadedTables){
       }
     }
   }
-print("about to add ages")  
+  print("about to add ages")  
   formattedTables <- addAges(formattedTables)
   print("about to add age group and group")  
-  formattedTables <- addAgeGroupAndGroup(formattedTables, groupBy)
-  ## JUDY add this back in if interest in including visit data in report
-  #formattedTables <- addVisitStats(formattedTables)
+  formattedTables <- addAgeGroupAndGroup(formattedTables, groupByVar)
+
   # put columns in same order as DES
   for (tableName in tablesAndVariables$tablesToCheck){
     DESVariableNames <- intersect(names(tableDef[[tableName]][["variables"]]),

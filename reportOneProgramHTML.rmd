@@ -23,28 +23,23 @@ params:
 
 ```{r datasetLabel, echo = FALSE, warning=FALSE}
 
-#options(knitr.table.format = "html") 
 tableData <- params$allTables
 program <- params$programsInReport
 groupVar <- params$groupVar
 
-
-if (!(params$datasetDesc=="")){
-  datasetLabel <- params$datasetDesc
-} else {datasetLabel <- NULL}
-
-```
-
-```{r, echo=FALSE, fig.align='left', message=FALSE, warning=FALSE, out.width='10%'}
 userDetails <- params$userDetails
 if (userDetails$uploadconcept_mr == "MR000"){
   headerMessage <- NULL
 } else headerMessage <- paste0("Dataset submitted for Concept ", userDetails$uploadconcept_mr)
 
-
 if (userDetails$uploaduser_id == ""){
   regionMessage <- NULL
-} else regionMessage <- paste0("from IeDEA Region ", params$region)
+} else regionMessage <- paste0("from Region ", params$region)
+
+if (!(params$datasetDesc=="")){
+  datasetLabel <- params$datasetDesc
+} else {datasetLabel <- NULL}
+
 ```
 
 ## `r knitr::include_graphics("iedeaLogoSmall.png")` Harmonist Data Toolkit Report for `r groupVar` `r program`
@@ -63,25 +58,24 @@ knitr::opts_chunk$set(
 )
 ```
 
-### Summary of uploaded tables (PROGRAM `r program`)
-Total number of patients from Program `r program` in dataset: `r params$datasetSummary$totalPatients`
+### Summary of uploaded tables (`r groupVar` `r program`)
+Total number of patients from `r groupVar` `r program` in dataset: `r params$datasetSummary$totalPatients`
 ```{r summary2, echo=FALSE, fig.align='left', message=FALSE, warning=FALSE, results='asis'}
-print(params$datasetSummary$tableSummaryKable)
+cat(params$datasetSummary$tableSummaryKable)
 ```
-
-### Summary statistics from uploaded tables (PROGRAM `r program`)
-
 
 ```{r summarytable, echo=FALSE, fig.align='left', message=FALSE, warning=FALSE, results='asis'}
 if (params$includeDataSummary){
   if (!is.null(params$datasetSummary$statsSummaryTable)){
-    print(params$datasetSummary$statsSummaryTable)
+    cat("### Summary statistics from uploaded tables", groupVar, program)
+    cat(params$datasetSummary$statsSummaryTable)
+    cat(params$datasetSummary$visitStatsSummaryTable)
   }
-  print(params$datasetSummary$visitStatsSummaryTable)
+  
 }
 ```
 
-### Summary of dataset completeness for PROGRAM `r program`
+### Summary of dataset completeness for `r groupVar` `r program`
 
 ```{r summaryMissingAndUnknown, echo=FALSE, fig.align='left', fig.height=4, fig.width=7, message=FALSE, warning=FALSE, results='asis', dev='svg'}
 if (is.null(params$datasetQuality$missingAndUnknownPlot)){
@@ -92,10 +86,13 @@ if (is.null(params$datasetQuality$missingAndUnknownPlot)){
 }
 
 if (!is.null(params$datasetQuality$appearancePlot)){
-  params$datasetQuality$appearancePlot
-}
+    if (is.character(params$datasetQuality$appearancePlot)){
+      cat(params$datasetQuality$appearancePlot)
+    } else {
+      print(params$datasetQuality$appearancePlot)
+    }
+  }
 ```
-
 
 ```{r calcHistHeight, echo = FALSE, message=FALSE, warning= FALSE, results='asis'}
 if (params$includeHistograms){
@@ -120,10 +117,9 @@ if (params$includeHistograms){
 ```
 
 
-
 ```{r kable, echo=FALSE, fig.height=5, fig.width=7.5, results='asis'}
 if (params$includeErrorSummary){
-  cat("## Data Quality Summary for PROGRAM ", Hmisc::latexTranslate(program),"  ")
+  cat("## Data Quality Summary for ", groupVar, Hmisc::latexTranslate(program),"  ")
   cat("\n")
   
   if (is.null(params$programSummary$errorSummaries)){
@@ -139,23 +135,25 @@ if (params$includeErrorSummary){
       if (!is.null(params$errorSummaryTables$errors)){
         cat("\n")
         cat("#### Summary of Errors", "\n")
-        print(params$errorSummaryTables$errors)
+        cat(params$errorSummaryTables$errors)
       }
       
       if (!is.null(params$errorSummaryTables$warnings)){
         cat("#### Summary of Warnings", "\n")
-        print(params$errorSummaryTables$warnings)
+        cat(params$errorSummaryTables$warnings)
       }
-      if (is.null(params$errorSummaryTables$badCodes)) cat("All coded variables had valid codes")
+      if (is.null(params$errorSummaryTables$badCodes)){
+        cat("All coded variables had valid codes")
+      }
       else {
         cat("#### Summary of Invalid Codes","\n")
-        print(params$errorSummaryTables$badCodes)
+        cat(params$errorSummaryTables$badCodes)
       }
     }
   }
   if (!is.null(params$programSummary$missingSummary)){
     if (nrow(params$programSummary$missingSummary)>0){
-      temp <- kable(params$programSummary$missingSummary, row.names = FALSE,
+      temp <- kbl(params$programSummary$missingSummary, row.names = FALSE,
                     caption = "Summary of Important Missing Variable Entries",
                     longtable = TRUE, format = "html", 
                     col.names = c("Table", "Variable", "Count", "Percent")) %>% 

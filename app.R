@@ -1,7 +1,7 @@
 # app.R
 # 
 # The goals of this Shiny App are as follows:
-#   1. Read in files (zip, csv, SAS, SPSS, or Stata) containing tables adhering to the IeDEA DES 
+#   1. Read in files (zip, csv, SAS, SPSS, or Stata) containing tables adhering to the common data model 
 #   2. Check for presence of required variables and tables
 #   3. Conduct data quality checks
 #   4. Provide feedback on possible data quality errors, interactively and in downloadable form 
@@ -12,6 +12,8 @@
 #   Judy Lewis, PhD, Vanderbilt Institute for Clinical and Translational Research
 #   Jeremy Stephens, Vanderbilt University Department of Biostatistics
 #   Version 1: August 10, 2017
+#   Version 2 (including integration with Hub): March 2019
+#   Version 3: Generalized to other data models: May 2021
 #   
 
 library(shiny)
@@ -20,6 +22,7 @@ library(rjson)
 library(tools)
 library(lubridate)
 library(shinyjs)
+library(kableExtra)
 library(rmarkdown)
 library(knitr)
 library(haven)
@@ -32,13 +35,14 @@ library(aws.s3)
 library(cowplot)
 library(httr)
 library(jsonlite)
-library(kableExtra)
 library(Hmisc)
 library(scales)
 library(filesstrings)
 library(purrr)
 library(htmltools)
 library(data.table)
+
+options(shiny.minified = FALSE)
 
 # global variable to track size of uploaded files so that users can be warned when application busy
 usage <- list()
@@ -48,29 +52,30 @@ source("redcapTokens.R", local = TRUE)
 source("awsKey.R", local = TRUE)
 source("helpers.R", local = TRUE)
 source("definitions.R", local = TRUE)
-source("initializeErrorFrames.R", local = TRUE)
+# specificDefinitions should be edited to match current research network specs
+source("specificDefinitions.R", local = TRUE)
 
-#source("otherVisitStats.R", local = TRUE)
+#source("otherVisitStats.R", local = TRUE) add when ready to add more report features
 
 # html for appBusy announcement
 busyAnnounce <- read_file("busyAnnounce.html")
 
-###############################
+################################################################################################
 # All column names in uploaded spreadsheets will be converted to all caps since variable names in 
 # the IeDEA data specification are all caps.
-###############################
+################################################################################################
 
 # appBusy will be TRUE when the application not responsive due to calculations
 appBusy <- FALSE
 
 shinyUI <- dashboardPage(
 
-  title = "IeDEA Harmonist Data Toolkit",
+  title = paste0(networkName," Harmonist Data Toolkit"),
 
   # custom header to include badge to indicate presence or absence of an active data request
   tags$header(
     span(
-      img(src="iedea_logo-100x40.png"),
+      img(src=networkLogo), # filename stored in Harmonist0C, file must be in www directory
       span("Harmonist Data Toolkit",class="harmonist-title"),
       class = "harmonist-logo"
     ),
@@ -156,6 +161,7 @@ shinyServer <- function(input, output, session){
   
   sessionID <- reactive(session$token)
   
+  # code for each page of application UI -------------------------------
   source("welcomeTab.R", local = TRUE)
   source("uploadTab.R", local = TRUE)
   source("reviewerrorTab.R", local = TRUE)
@@ -173,6 +179,10 @@ shinyServer <- function(input, output, session){
   source("dateComparisons.R", local = TRUE)
   source("dataQuality.R", local = TRUE)
   source("reportGenerationOptions.R", local = TRUE)
+  
+  #### IeDEA-specific data checks #####
+  source("iedeaDataChecks.R", local = TRUE)
+ # source("customChecks.R", local = TRUE) for future generalized version
 
   
   # code for report generation ---------------------------------------
@@ -185,10 +195,6 @@ shinyServer <- function(input, output, session){
   # reactive values
   sessionStartTime <- reactiveVal(isolate(Sys.time()))
   lastActivity <- reactiveVal(isolate(Sys.time()))
-    
-  # store region codes and names in a data frame-- either from REDCap or if REDCap not available,
-  # the codes and names are provided (must be updated manually)
-  regionData <- getAllRegionInfo()
   
   # reload guard is javascript function that prevents application from closing. Must be set to FALSE 
   # to allow application to close session
@@ -244,7 +250,7 @@ shinyServer <- function(input, output, session){
   submitSuccess <- reactiveVal(NULL)
 
  
-  groupByChoice <- reactiveVal("PROGRAM")
+  groupByChoice <- reactiveVal(defGroupVar)
   currentGroupSelection <- reactiveVal(NULL)  
   finalGroupChoice <- reactiveVal(NULL)
 
@@ -287,6 +293,7 @@ shinyServer <- function(input, output, session){
   # getUserInfo ------------------------------------------------------
   # reactive variable to retrieve details about user if entered from the Hub, NULL otherwise
   getUserInfo <- reactive({
+    if (projectDef$hub_y == 0) return(NULL)
     query <- parseQueryString(session$clientData$url_search)
     encryptedToken <- query[["tokendt"]]
     if (is.null(encryptedToken)){
@@ -341,20 +348,21 @@ shinyServer <- function(input, output, session){
     # if a user is testing the toolkit, no need to add progress to Harmonist 17
     query <- parseQueryString(session$clientData$url_search)
     if (!is.null(query[["test"]]) && query[["test"]]=="T") testUser(TRUE)
-    
+
     userInfo <- getUserInfo()
     if (is.null(userInfo)){
       hubInfo$fromHub <- FALSE
       hubInfo$userDetails <- defaultUserInfo # in definitions.R
-      
     } else {
       hubInfo$fromHub <- TRUE
       updateTabItems(session,"tabs", "upload")
       regionID <- as.numeric(userInfo[["uploadregion_id"]])
-      userInfo[["regionName"]] <- regionData$region_name[[regionID]] 
-      userInfo[["regionCode"]] <- regionData$region_code[[regionID]] 
+      # store region codes and names in a data frame-- either from REDCap or if REDCap not available,
+      # the codes and names are provided (must be updated manually)
+      regionData <- getOneRegionInfo(regionID)
+      userInfo[["regionName"]] <- regionData$region_name 
+      userInfo[["regionCode"]] <- regionData$region_code
       hubInfo$userDetails <- as.list(userInfo)
-      
     }
   })
   
@@ -394,6 +402,7 @@ shinyServer <- function(input, output, session){
   # *if* the user came from the Hub. Otherwise, no option to return to Hub
   backToHubMessage <- reactive({
     if (is.null(hubInfo$fromHub)) return(NULL)
+    if (projectDef$hub_y == 0) return(NULL)
     if (hubInfo$fromHub){
       
       hub_url <- paste0(plugin_url, "?token=",
@@ -421,7 +430,7 @@ shinyServer <- function(input, output, session){
       useSampleData(FALSE)
       submitSuccess(NULL)
       tablesAndVariables <- NULL
-      groupByChoice("PROGRAM")
+      groupByChoice(defGroupVar)
       currentGroupSelection(NULL)
       finalGroupChoice(NULL)
       groupByInfo <- NULL
@@ -447,7 +456,7 @@ shinyServer <- function(input, output, session){
     useSampleData(FALSE)
     submitSuccess(NULL)
     tablesAndVariables <- NULL
-    groupByChoice("PROGRAM")
+    groupByChoice(defGroupVar)
     currentGroupSelection(NULL)
     finalGroupChoice(NULL)
     groupByInfo <- NULL
@@ -494,7 +503,7 @@ shinyServer <- function(input, output, session){
   # and initiate data quality checks with startDQ TRUE. 
   observeEvent(input$step2,{
     if (is.null(startDQ()) &&
-        groupByChoice() == "PROGRAM" && 
+        groupByChoice() == defGroupVar && 
         groupByInfo()$numPrograms == 1 &&
         !is.null(groupByInfo()$otherGroupOptions)){
       showModal(tags$div(id="dataQualityChecks",
@@ -502,7 +511,9 @@ shinyServer <- function(input, output, session){
                            easyClose = FALSE, 
                            title = "Confirm Grouping Options", 
                            size = 'l',
-                           "Your patients are currently grouped by PROGRAM and are all in one program.",
+                           paste0("Your patients are currently grouped by ",
+                           defGroupVar,
+                           " and are all in one group."),
                            "To choose a different grouping option select the Change button below.",
                            footer = tagList(
                              actionButton("continueOneProg", "Continue"),
@@ -549,7 +560,7 @@ shinyServer <- function(input, output, session){
     # if user has chosen Step 2 tab and dataset has been uploaded but data quality checks haven't been 
     # initiated, start data quality checks
     if ((tab == "reviewerror") && (!is.null(uploadedTables())) && is.null(startDQ())){
-      if (groupByChoice() == "PROGRAM" && 
+      if (groupByChoice() == defGroupVar && 
           groupByInfo()$numPrograms == 1 &&
           !is.null(groupByInfo()$otherGroupOptions)){
         showModal(tags$div(id="dataQualityChecks",
@@ -557,8 +568,10 @@ shinyServer <- function(input, output, session){
                              easyClose = FALSE, 
                              title = "Confirm Grouping Options", 
                              size = 'l',
-                             "Your patients are currently grouped by PROGRAM and are all in one program.",
-                           "To choose a different grouping option select the Change button below.",
+                             paste0("Your patients are currently grouped by ",
+                             defGroupVar,
+                             "and are all in one group."),
+                             "To choose a different grouping option select the Change button below.",
                              footer = tagList(
                                actionButton("continueOneProg", "Continue"),
                                actionButton("changeSelection", "Change", class = "btn-success")
@@ -649,6 +662,7 @@ shinyServer <- function(input, output, session){
   
   #read in example concept description json. In the future: choose specific concept as determined by token in URL
   concept <- reactive({
+    if (projectDef$hub_y == 0) return(rjson::fromJSON(file = "concept0.json"))
     if (!hubInfo$fromHub) return(rjson::fromJSON(file = "concept0.json"))
     cat("Session:", isolate(sessionID())," user is from the Hub","\n", file = stderr())  
 
@@ -656,14 +670,21 @@ shinyServer <- function(input, output, session){
     conceptInfo <- getOneRecord(tokenForHarmonist3, record_id_Harmonist3, projectName = "Harmonist 3", formName = "data_specification")
     if (inherits(conceptInfo, "postFailure")) {
       errorMessageModal(messageHeader = "Failed to fetch request concept",
-                        message = "Please try again later")
+                        message = "Please check internet connection and try again later",
+                        secondaryMessage = "REDCap could not access data request details")
       updateTabItems(session, "tabs", "welcome")
+      # reset so that session can continue but without concept details #revisit this because it doesn't fix
+      hubInfo$fromHub <- FALSE
       return(rjson::fromJSON(file = "concept0.json"))
     }
     conceptInfo <- as.list(conceptInfo)
     conceptInfo$tablefields <- rjson::fromJSON(conceptInfo$shiny_json[[1]])
     conceptInfo$contact1 <- getOneRecord(tokenForHarmonist5, conceptInfo$sop_creator[[1]], projectName = "Harmonist 5")
-    conceptInfo$contact2 <- getOneRecord(tokenForHarmonist5, conceptInfo$sop_creator2[[1]], projectName = "Harmonist 5")
+   # if (conceptInfo$sop_creator2 != ""){  # now it's "Select Name" if empty ?
+      conceptInfo$contact2 <- getOneRecord(tokenForHarmonist5, conceptInfo$sop_creator2[[1]], projectName = "Harmonist 5")
+   # } else{
+   #   conceptInfo$contact2 <- ""
+   # }  
     conceptInfo$datacontact <- getOneRecord(tokenForHarmonist5, conceptInfo$sop_datacontact[[1]], projectName = "Harmonist 5")
     # data downloaders are stored as a comma-delimited list in REDCap sop_downloaders
     downloaders <- as.list(strsplit(conceptInfo$sop_downloaders[[1]], ",")[[1]])
@@ -673,6 +694,7 @@ shinyServer <- function(input, output, session){
   
   # request status badge in header, persists, indicates if user is responding to active data request
   output$requestStatus <- renderUI({
+    if (projectDef$hub_y == 0) return(NULL)
     if (is.null(hubInfo$userDetails)) return(NULL)
     
     if (hubInfo$fromHub){
@@ -764,7 +786,7 @@ shinyServer <- function(input, output, session){
   
       if (nestedZipFlag || duplicateTableFlag){
         nestedZipMsg <- ifelse(nestedZipFlag, "nested ZIP files", "")
-        duplicateTableMsg <- ifelse(duplicateTableFlag, " files with duplicate IeDEA table names", "")
+        duplicateTableMsg <- ifelse(duplicateTableFlag, " files with duplicate table names", "")
         connector <- ifelse(nestedZipFlag && duplicateTableFlag, "and", "")
         errorMessageModal(
           messageHeader = "File Selection Error",
@@ -855,7 +877,7 @@ shinyServer <- function(input, output, session){
       errorMessageModal(messageHeader = "Invalid File Type",
                         message = tagList(
                           tags$p("Your uploaded files included: "),
-                          tags$p("Valid file extensions for IeDEA tables:", 
+                          tags$p("Valid file extensions for data model tables:", 
                                  paste(validFileTypes, collapse = ", "), " and zip")
                         )
                         )
@@ -894,10 +916,12 @@ shinyServer <- function(input, output, session){
     nonDESTypes <- !allfiles$extension %in% validFileTypes
     if (all(nonDESTypes)){
       listOfFiles <- makeBulletedList(allfiles$name)
-      messageHeader <- "No Valid IeDEA Files Detected"
+      messageHeader <- paste0("No Valid ",
+                              networkName,
+                              " Files Detected")
       
       message <- tagList(
-        tags$p("Valid IeDEA Harmonist Data Toolkit file types:", paste(validFileTypesToDisplay, collapse = ", "), ". "),
+        tags$p("Valid Harmonist Data Toolkit file types:", paste(validFileTypesToDisplay, collapse = ", "), ". "),
         tags$p("Uploaded", makeItPluralOrNot("file", length(allfiles$name)), "detected: "), 
         listOfFiles)
       
@@ -924,9 +948,13 @@ shinyServer <- function(input, output, session){
       if (!all(extraZipFilesIndices)){
         badFiles <- badFiles[which(!extraZipFilesIndices),]
         messagePart1 <- case_when(length(badFiles$name) == 1 ~
-                                    "The following non-IeDEA file is a prohibited file type: ",
+                                    paste0("The following non-",
+                                           networkName,
+                                           " file is a prohibited file type: "),
                                   length(badFiles$name) > 1 ~
-                                    "The following non-IeDEA files are prohibited file types: ")
+                                    paste0("The following non-",
+                                           networkName,
+                                           " files are a prohibited file type: "))
         
         errorMessageModal(messageHeader = "Prohibited File Type Detected",
                           message = paste0(messagePart1, 
@@ -938,33 +966,35 @@ shinyServer <- function(input, output, session){
    
     validFiles <- allfiles[which(!(allfiles$name %in% c(invalidFiles$name, emptyFiles))),]
     
-    # check to make sure that tblbas is included in valid uploaded files
-    if (!("tblbas" %in% validFiles$tableName)){
+    # check to make sure that indexTableName is included in valid uploaded files
+    if (!(indexTableNameLower %in% validFiles$tableName)){
       listOfFiles <- makeBulletedList(allfiles$name)
 
-      # first see if tblbas was actually included but wrong file type
-      if ("tblbas" %in% invalidFiles$tableName){
-        errorMessageModal(messageHeader = "tblBAS: Invalid File Format",
+      # first see if indexTableName was actually included but wrong file type
+      if (indexTableNameLower %in% invalidFiles$tableName){
+        errorMessageModal(messageHeader = paste0(indexTableName, ": Invalid File Format"),
                           message = tagList(
-                            tags$p(paste0("The core data table (tblBAS) is required for all IeDEA DES data uploads and must be saved in one of the accepted formats (", validFileTypesToDisplay, ").")),
+                            tags$p(paste0("The core data table (", indexTableName, ") is required for all data uploads and must be saved in one of the accepted formats (", validFileTypesToDisplay, ").")),
                             tags$p("You uploaded the following files: "), 
                             listOfFiles  ))
         resetFileInput$reset <- TRUE
         return(NULL)
-      } else if (any(startsWith(tolower(emptyFiles), "tblbas"))){ # check to make sure tblBAS has records and inform user if error
-          errorMessageModal(messageHeader = "No Records in tblBAS",
-                            message = "Core table tblBAS is empty. This table is required and must have valid records.")
+      } else if (any(startsWith(tolower(emptyFiles), indexTableNameLower))){ # check to make sure indexTableName has records and inform user if error
+          errorMessageModal(messageHeader = paste0("No Records in ", indexTableName),
+                            message = paste0("Core table ", indexTableName, " is empty. This table is required and must have valid records."))
           resetFileInput$reset <- TRUE
           return(NULL)
       }
-      # otherwise, no tblBAS found at all
+      # otherwise, no indexTableName found at all
       else {
-        errorMessageModal(messageHeader = "tblBAS Not Detected",
+        errorMessageModal(messageHeader = paste0(indexTableName, " Not Detected"),
                           message = tagList(
-                            tags$p("The core data table (tblBAS) is required for all IeDEA DES data uploads."),
+                            tags$p(paste0("The core data table (", indexTableName, ") is required for all data uploads.")),
                             tags$p("The following files were uploaded: ", 
                                     listOfFiles)))
         resetFileInput$reset <- TRUE
+        # if somehow this error occurred with corrupted sample dataset, set useSampleData back to FALSE
+        if (useSampleData()) useSampleData(FALSE)
         return(NULL)
       }
     }
@@ -979,7 +1009,7 @@ shinyServer <- function(input, output, session){
       errorMessageModal(
         messageHeader = "File Selection Error",
         message = tagList(
-          tags$p("You uploaded IeDEA files with duplicate file names:",
+          tags$p("You uploaded files with duplicate file names:",
           makeBulletedList(dupFileNames)
           )
         )
@@ -991,7 +1021,7 @@ shinyServer <- function(input, output, session){
     tablesUploadedMatching <- tolower(requested) %in% tolower(uploaded)
     # make vector of uploaded tables that match request, names in DES mixed case format from request
     matchingTables <- requested[tablesUploadedMatching]
-    # make sure tblBAS listed first in matchingTables 
+    # make sure indexTableName listed first in matchingTables 
     matchingTables <- intersect(names(tableDef), matchingTables)
     missingTables <- requested[!tablesUploadedMatching]
     if (is_empty(missingTables)) missingTables <- NULL
@@ -1011,9 +1041,9 @@ shinyServer <- function(input, output, session){
     # Remove the following line when that logic is added to Harmonist
     nonPregTables <- setdiff(tablesWithNoPatientID, pregnancyTables)
  
-    # below, remove tblBAS from tablesWithPatientID since that is the required PATIENT table 
-    # and we often want to merge it with all other PATIENT tables
-    tablesWithPatientID <- tablesWithPatientID[!(tablesWithPatientID=="tblBAS")] #tables other than tblBAS with PATIENT as ID
+    # below, remove indexTableName from tablesWithPatientID since that is the required patientVar table 
+    # and we often want to merge it with all other patientVar tables
+    tablesWithPatientID <- tablesWithPatientID[!(tablesWithPatientID==indexTableName)] #tables other than indexTableName with patientVar as ID
     
     uploadedFiles <- list(matchingTables, extraDESTables, extraNonDESTables, extraFiles,
                           missingTables, allDESTables, tablesWithPatientID, tablesWithNoPatientID, emptyFiles)
@@ -1055,7 +1085,7 @@ shinyServer <- function(input, output, session){
     ))
   }
   
-  #************This only uploads tables matching IeDEA DES names,
+  #************This only uploads tables matching common data model names,
   # and only uploads tables once all requested tables have been selected
   # The data for table names(uploadedTables())[i] are stored in uploadedTables()[[i]]
   # uploadedTables table names will match the IeDEA DES format of mixed case table
@@ -1112,45 +1142,50 @@ shinyServer <- function(input, output, session){
     if (!is_empty(missingColsRequested)) missingColsRequested <- missingColsRequested[theseTablesInOrder]
     removeModal()
     
-    # check to make sure tblBAS has records and inform user if error
-    if ("tblBAS" %in% blankTables){
-      errorMessageModal(messageHeader = "No Records in tblBAS",
-                        message = "Core table tblBAS is empty. This table is required and must have valid records.")
+    # check to make sure indexTableName has records and inform user if error
+    if (indexTableName %in% blankTables){
+      errorMessageModal(messageHeader = paste0("No Records in ", indexTableName),
+                        message = paste0("Core table ", indexTableName, " is empty. This table is required and must have valid records."))
       resetFileInput$reset <- TRUE
       return(NULL)
     }
     
-    # check for missing PATIENT IDs and inform user if error
-    blankPATIENTS <- is_blank_or_NA_elements(uploaded$tblBAS$PATIENT)
-    if (any(blankPATIENTS, na.rm=TRUE)){
-      errorMessageModal(messageHeader = "Missing PATIENT ID in tblBAS",
-                        message = paste0(sum(blankPATIENTS)," blank PATIENT ",
-                                         makeItPluralOrNot("ID", sum(blankPATIENTS)), 
-                                         " in tblBAS: Row # ",
-                                         paste(which(blankPATIENTS),collapse = ", ")))
+    # check for missing patientVar IDs and inform user if error
+    blankPatients <- is_blank_or_NA_elements(uploaded[[indexTableName]][[patientVar]])
+    if (any(blankPatients, na.rm=TRUE)){
+      errorMessageModal(messageHeader = paste0("Missing ", patientVar, " ID in ", indexTableName),
+                        message = paste0(sum(blankPatients)," blank ", patientVar, " ",
+                                         makeItPluralOrNot("ID", sum(blankPatients)), 
+                                         " in ", indexTableName, ": Row # ",
+                                         paste(which(blankPatients),collapse = ", ")))
       resetFileInput$reset <- TRUE
       return(NULL)
     }
-    # Check for duplicate PATIENT ids but no need to exclude blank patient IDs since those would already 
+    # Check for duplicate patientVar ids but no need to exclude blank patientVar IDs since those would already 
     # be caught by missing ID check above
-    duplicatedPATIENTS <- duplicated(uploaded$tblBAS$PATIENT, na.rm = TRUE)
-    if (any(duplicatedPATIENTS, na.rm=TRUE)){
-      dupID <- unique(uploaded$tblBAS$PATIENT[which(duplicatedPATIENTS)])
-      errorMessageModal(messageHeader = "Duplicate PATIENT ID in tblBAS",
-                        paste0(sum(duplicatedPATIENTS)," duplicate PATIENT records in tblBAS involving the following PATIENT IDs: ",
+    duplicatedPatients <- duplicated(uploaded[[indexTableName]][[patientVar]], na.rm = TRUE)
+    if (any(duplicatedPatients, na.rm=TRUE)){
+      dupID <- unique(uploaded[[indexTableName]][[patientVar]][which(duplicatedPatients)])
+      errorMessageModal(messageHeader = paste0("Duplicate ", patientVar, " ID in ", indexTableName),
+                        paste0(sum(duplicatedPatients)," duplicate ", patientVar, " records in ", indexTableName, " involving the following ", patientVar, " IDs: ",
                                paste(dupID, collapse = ", ")))
       resetFileInput$reset <- TRUE
       return(NULL)
     }
     
     if (!is.null(missingCols)){
-      missing <- rownames_to_column(as.data.frame(missingCols))
-      setnames(missing, c(1,2), c("Table", "Missing Required Field"))
-      missing$Table <- tableBadge(missing$Table)
+      missingColsFormatted <- NULL
+      # format for display in error message
+      missingCols <- unlist(missingCols)
+      missingColsFormatted$Table <- names(missingCols)
+      missingColsFormatted$field <- unname(missingCols)
+      missingColsFormatted <- as.data.frame(missingColsFormatted)
+      setnames(missingColsFormatted, c(1,2), c("Table", "Missing Required Field"))
+      missingColsFormatted$Table <- tableBadge(missingColsFormatted$Table)
       textForREDCap <- paste(paste0(names(missingCols),": ", missingCols), collapse = "; ")
       errorMessageModal(messageHeader = "Missing or Empty Required Columns",
                         message = "Required columns in the following tables are missing or completely blank:",
-                        messageTable = missing, textForREDCap = textForREDCap)
+                        messageTable = missingColsFormatted, textForREDCap = textForREDCap)
       resetFileInput$reset <- TRUE
       return(NULL)
     }
@@ -1161,7 +1196,7 @@ shinyServer <- function(input, output, session){
       #retrieve full file name to alert user
       badIndices <- match(tolower(names(which(badFiles))), tolower(file_path_sans_ext(allfiles$name)))
       badFileNames <- allfiles$name[badIndices]
-      message <- paste0("An error was encountered when attempting to read the following IeDEA ",
+      message <- paste0("An error was encountered when attempting to read the following ",
                         makeItPluralOrNot("file", length(badFileNames)),
                         ": ",
                         paste(badFileNames, collapse = ", "))
@@ -1190,8 +1225,8 @@ shinyServer <- function(input, output, session){
                       non_des_variables = as.character(jsonlite::toJSON(results$non_des_variables)),
                       des_tables = paste(names(uploaded), collapse = ","),
                       non_des_files = paste(uploadList()$ExtraFiles, collapse = ","),
-                      num_patients = uniqueN(uploaded$tblBAS$PATIENT),
-                      programs = paste(as.character(unique(sanitizeNames(uploaded$tblBAS$PROGRAM))), collapse = ", ")))
+                      num_patients = uniqueN(uploaded[[indexTableName]][[patientVar]]),
+                      programs = paste(as.character(unique(sanitizeNames(uploaded[[indexTableName]][[defGroupVar]]))), collapse = ", ")))
     return(uploaded)
   })
   
@@ -1202,8 +1237,8 @@ shinyServer <- function(input, output, session){
     if (is.null(uploadedTablesInitial())) return(NULL)
     req(tablesAndVariables)
 
-    tblBAS <- uploadedTablesInitial()$tblBAS
-    programs <- sort(unique(na.omit(tblBAS$PROGRAM)))
+    indexTable <- uploadedTablesInitial()[[indexTableName]]
+    programs <- sort(unique(na.omit(indexTable[[defGroupVar]])))
     programs <- programs[!is_blank_or_NA_elements(programs)]
     numPrograms <- length(programs)
 
@@ -1213,13 +1248,14 @@ shinyServer <- function(input, output, session){
       numPrograms = numPrograms,
       otherGroupOptions = otherGroupOptions
     )
-    extraVars <- tablesAndVariables$details$non_des_variables$tblBAS
-    if ("CENTER" %in% names(tblBAS)) {
+    extraVars <- tablesAndVariables$details$non_des_variables[[indexTableName]]
+    # unique to IeDEA
+    if ("CENTER" %in% names(indexTable)) {
       extraVars <- c(extraVars, "CENTER")
     }
     if (is_empty(extraVars)) return(results)
     # only allow character columns to be grouping columns (not dates, etc)
-    extraVars <- extraVars[sapply(tblBAS[,extraVars], is.character)]
+    extraVars <- extraVars[sapply(indexTable[,extraVars], is.character)]
     if (is_empty(extraVars)) return(results)
     # get rid of column names with non-ASCII characters:
     extraVars <- extraVars[!grepl(pattern = "[^A-Za-z0-9_-]+", extraVars)]
@@ -1227,23 +1263,23 @@ shinyServer <- function(input, output, session){
     # don't use dates or date approx codes as groups
     extraVars <- extraVars[!endsWith(extraVars, "_D") & !endsWith(extraVars, "_A") & !is_blank_or_NA_elements(extraVars)]
     if (is_empty(extraVars)) return(results)
-    classes <- sapply(extraVars, function(x){class(tblBAS[[x]])})
+    classes <- sapply(extraVars, function(x){class(indexTable[[x]])})
     extraVars <- extraVars[classes %in% c("numeric", "character")]
     if (is_empty(extraVars)) return(results)
-      missingness <- sapply(extraVars, function(x){sum(is_blank_or_NA_elements(tblBAS[[x]]))})/nrow(tblBAS)
-      extraVars <- extraVars[which(missingness == 0)]
-      # find other possible grouping variables, should be character and should be 
-      # mostly non-missing
-      if (is_empty(extraVars)) return(results)
-      
-      for (possibleGroupVar in extraVars){
-        groupLevels <- unique(na.omit(tblBAS[[possibleGroupVar]]))
-        groupLevels <- groupLevels[!is_blank_or_NA_elements(groupLevels)]
-        numLevels <- length(groupLevels)
-        if ((numLevels > 1) && (numLevels < maxNumberOfReportGroups)){  #in definitions.R
-          otherGroupOptions[[possibleGroupVar]] <- list(levels = sort(groupLevels),
-                                                        numLevels = numLevels)
-        }
+    missingness <- sapply(extraVars, function(x){sum(is_blank_or_NA_elements(indexTable[[x]]))})/nrow(indexTable)
+    extraVars <- extraVars[which(missingness == 0)]
+    # find other possible grouping variables, should be character and should be 
+    # mostly non-missing
+    if (is_empty(extraVars)) return(results)
+    
+    for (possibleGroupVar in extraVars){
+      groupLevels <- unique(na.omit(indexTable[[possibleGroupVar]]))
+      groupLevels <- groupLevels[!is_blank_or_NA_elements(groupLevels)]
+      numLevels <- length(groupLevels)
+      if ((numLevels > 1) && (numLevels < maxNumberOfReportGroups)){  #in definitions.R
+        otherGroupOptions[[possibleGroupVar]] <- list(levels = sort(groupLevels),
+                                                      numLevels = numLevels)
+      }
     }
     results$otherGroupOptions <- otherGroupOptions
     return(results)
@@ -1257,8 +1293,8 @@ shinyServer <- function(input, output, session){
     if (is.null(formattedTables())) return(NULL)
     
     groupVar <- finalGroupChoice()
-  # note that if groupVar is CENTER it will be factors...
-    groupLevels <- sort(unique(formattedTables()$tblBAS[[groupVar]]))
+    # note that if groupVar is CENTER it will be factors...
+    groupLevels <- sort(unique(formattedTables()[[indexTableName]][[groupVar]]))
     # create dataframe that includes all group levels in first column
     groups <- tibble(groupLevels)
     names(groups) <- groupVar
@@ -1283,7 +1319,7 @@ shinyServer <- function(input, output, session){
                                    right_join(thisTableGroups) %>% replace_na(list(numRows=0))
                                })
     return(tableRowsByGroup)
-      
+    
   })
   
   
@@ -1299,20 +1335,6 @@ shinyServer <- function(input, output, session){
     }
   })
   
-  
-  # # matchingColumns is a reactive variable: a list of all IeDEA DES variables present in dataset
-  # # that contain data
-  # # (useful in some data quality functions)
-  # matchingColumns <- reactive({
-  #   if (is.null(uploadedTables())) return(NULL)
-  #   if (resetFileInput$reset) return(NULL)
-  #   matchingColumns <- sapply(uploadList()$AllDESTables, function(tableName){
-  #     if (tableName %in% tablesAndVariables$blankTables) return(NULL)
-  #     return(intersect(names(uploadedTables()[[tableName]]), names(tableDef[[tableName]]$variables)))
-  #   })
-  #   return(matchingColumns)
-  # })
-
   # code for formatting uploaded tables before plotting and reporting---------------------------------------
   # also makes checking valid codes, etc easier
   formattedTables <- reactive({
@@ -1360,12 +1382,12 @@ shinyServer <- function(input, output, session){
     }
     
     lastActivity(Sys.time())
-    # for now, only use tables with PATIENT ID in appearance summary
+    # for now, only use tables with patientVar ID in appearance summary
     updateModal("Checking for the number of valid patients in each table")
     groupBy <- resources$finalGroupChoice
     appearanceSummary <- findPatients(resources$formattedTables,
                                       resources$tablesAndVariables$tablesToCheckWithPatientID,
-                                      resources$tableRowsByGroup$tblBAS[[groupBy]],
+                                      resources$tableRowsByGroup[[indexTableName]][[groupBy]],
                                       groupBy)
 
     cat("Session:", isolate(sessionID())," about to summarize all errors","\n", file = stderr())  
@@ -1385,7 +1407,7 @@ shinyServer <- function(input, output, session){
                       toolkituser_id = userDetails()$uploaduser_id,
                       datarequest_id = userDetails()$datacall_id,
                       upload_filenames = paste(input$loaded$name,collapse = ","),
-                      num_patients = uniqueN(resources$formattedTables$tblBAS$PATIENT),
+                      num_patients = uniqueN(resources$formattedTables[[indexTableName]][[patientVar]]),
                       error_summary = as.character(jsonlite::toJSON(summaries$summaryFrames$summaryFrameWithCodes))))
     return(list(
       "totalErrors" = nrow(errorFrame),

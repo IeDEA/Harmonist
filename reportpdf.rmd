@@ -1,11 +1,10 @@
 ---
-
 header-includes:
   - \usepackage{booktabs}
   - \usepackage{longtable}
   - \usepackage{array}
   - \usepackage{multirow}
-  - \usepackage[table]{xcolor}
+  - \usepackage{colortbl}
 output: 
   pdf_document:
     keep_tex: TRUE
@@ -37,6 +36,9 @@ params:
   reportOutput: "reportOutput"
   errorSummaryTables: "errorSummaryTables"
   groupVar: "groupVar"
+  indexTableName: "indexTableName"
+  patientVar: "patientVar"
+  patientVarSym: "patientVarSym"
 ---
 
 
@@ -47,12 +49,15 @@ groupVarSE <- rlang::sym(groupVar)
 userDetails <- params$userDetails
 region <- params$region 
 userDetails <- params$userDetails
+indexTableName <- params$indexTableName
 if (userDetails$uploadconcept_mr == "MR000"){
   headerMessage <- NULL
 } else headerMessage <- paste0("Dataset submitted for Concept ", userDetails$uploadconcept_mr)
 if (userDetails$uploaduser_id == ""){
   regionMessage <- NULL
-} else regionMessage <- paste0("from IeDEA Region ", params$region)
+} else regionMessage <- paste0("from IeDEA Region ", region)
+
+
 # max number of characters in x label in heat map for labels to be horizontal
 maxNumberOfHeatMapCharX <- 10
 ```
@@ -81,10 +86,14 @@ sumTables <- params$datasetSummary$tableSummaryKable
 ```
 
 ```{r listOfPrograms, message=FALSE, warning=FALSE, include=FALSE, results='asis'}
-groups <- sort(unique(tableData$tblBAS[[groupVar]]))
+groups <- sort(unique(tableData[[indexTableName]][[groupVar]]))
 groups <- groups[groups != "Missing"]
 # use groups variable in later chunks
-numberInGroup <- map_dbl(groups, ~nrow(unique(select(filter(tableData$tblBAS, (!! rlang::sym(groupVar)) == .),PATIENT)))) 
+numberInGroup <- map_dbl(groups, 
+                         ~nrow(unique(select(
+                           filter(tableData[[indexTableName]], 
+                                  (!! rlang::sym(groupVar)) == .), 
+                           params$patientVarSym)))) 
 groupSummary <- data.frame("GROUP" = groups, "Patients" = numberInGroup)
 names(groupSummary)[[1]] <- groupVar
 appearanceSummary <- params$appearanceSummary
@@ -94,7 +103,11 @@ temp <- groupSummary
     names(numberInTable) <- c(groupVar,tableName)
     temp <- left_join(temp, numberInTable, by = groupVar)
   }
-sumProgs <- kable(temp, format = "latex",  caption = paste0(groupVar, " in Dataset"),longtable = T, booktabs = T) %>%
+sumProgs <- kbl(temp, 
+                format = "latex",  
+                caption = paste0("Number of Patients from Each ", 
+                                 groupVar, " in Dataset"),
+                longtable = T, booktabs = T) %>%
   kable_styling(latex_options = c("repeat_header"))
   #kable_styling(full_width = FALSE, position = "right", "bordered")
 ```
@@ -107,7 +120,7 @@ sumProgs
 
 ```{r summarytable, echo=FALSE, message=FALSE, warning=FALSE, results='asis'}
 tableToShow <- params$tableOfVariables
-sumVars <- kable(tableToShow, "latex",caption = "Summary of Uploaded IeDEA Tables", longtable = T, booktabs = T) %>% 
+sumVars <- kbl(tableToShow, "latex",caption = "Summary of Uploaded Tables", longtable = T, booktabs = T) %>% 
   kable_styling(latex_options = c("striped", "repeat_header"),full_width = F)
 if (length(params$tableOfVariables) == 4){
   sumVars <- sumVars %>% column_spec(3, width = "25em",border_left = T) %>% column_spec(4, "10em",border_left = T)
@@ -192,7 +205,7 @@ createAppearanceBarPlot <- function(df){
     geom_bar(stat = "identity", fill = "lightgray") + 
     theme(legend.position="none",axis.text.x=element_text(size = 9), axis.text.y=element_text(size = 9)) + 
     xlab(groupVar) +
-    ylab(paste0("percent from tblBAS included in ", tableName)) +
+    ylab(paste0("percent from ", indexTableName, " included in ", tableName)) +
     coord_flip(ylim = c(0,100))
   width = 6
   height = 0.5 + 0.5 * uniqueN(df[[groupVar]])
@@ -205,22 +218,31 @@ createAppearanceBarPlot <- function(df){
 ```
 
 
-```{r appearanceHeatmap, echo=FALSE, fig.height=5, fig.width=5.5, fig.cap="Percent of Patients from tblBAS Included", message=FALSE, warning=FALSE, results='asis'}
+```{r appearanceHeatmap, echo=FALSE, fig.height=5, fig.width=5.5, fig.cap=paste0("Percent of Patients from ", indexTableName, " Included"), message=FALSE, warning=FALSE, results='asis'}
 # if tblBAS was the only table with PATIENT as a main ID, don't create a heatmap
 if (is.null(params$appearanceSummary)) {
   appearanceHeatmap <- setFakeFigureDim()
 } else {
   # at least one table with PATIENT was shared in addition to tblBAS
-  df <- params$appearanceSummary
-  df <- tidyr::complete(df, (!!groupVarSE), table)
-  # if only one additional table was shared, create a bar plot instead of heat map
-  if (length(unique(df$table)) == 1){
-   appearanceHeatmap <- createAppearanceBarPlot(df)
-  } 
-  if (length(unique(df$table)) > 1) {
-    xOrder <- names(params$allTables)
-    df[["table"]] <- factor(df[["table"]], levels = xOrder)
-    appearanceHeatmap <- generateHeatMapStoplightPercent(df, "table",groupVar)
+  
+  # if appearance summary includes a message that means
+  # every patient is included in patient-linked tables, so don't create heatmap
+  if ("message" %in% names(params$appearanceSummary)){
+    appearanceHeatmap <- setFakeFigureDim()
+    # replace heatmap with message about all patients appearing in tables
+    appearanceHeatmap$p <- params$appearanceSummary$message[[1]]
+  } else {
+    df <- params$appearanceSummary
+    df <- tidyr::complete(df, (!!groupVarSE), table)
+    # if only one additional table was shared, create a bar plot instead of heat map
+    if (length(unique(df$table)) == 1){
+      appearanceHeatmap <- createAppearanceBarPlot(df)
+    } 
+    if (length(unique(df$table)) > 1) {
+      xOrder <- names(params$allTables)
+      df[["table"]] <- factor(df[["table"]], levels = xOrder)
+      appearanceHeatmap <- generateHeatMapStoplightPercent(df, "table",groupVar)
+    }
   }
 }
 ```
@@ -314,7 +336,7 @@ if (params$includeErrorSummary){
 ``` {r missing, results= 'asis', echo=FALSE}
 if (params$includeErrorSummary & (nrow(params$missingSummary)>0)){
   missingSummary <- params$missingSummary %>% select(-category)
-    kable(missingSummary, row.names = FALSE, caption = "Summary of Important Missing Variable Entries",
+    kbl(missingSummary, row.names = FALSE, caption = "Summary of Important Missing Variable Entries",
           longtable = TRUE, booktabs = T,
         format = "latex") %>% kable_styling(latex_options = c("repeat_header"))
    
@@ -361,9 +383,13 @@ if (params$includeErrorSummary &
 }
 ```
 
-```{r showAppearanceHeatmap, echo=FALSE, fig.height=appearanceHeatmap$height, fig.width=appearanceHeatmap$width, fig.cap="Percent of Patients from tblBAS Included", message=FALSE, warning=FALSE, results='asis'}
+```{r showAppearanceHeatmap, echo=FALSE, fig.height=appearanceHeatmap$height, fig.width=appearanceHeatmap$width, fig.cap=paste0("Percent of Patients from ", indexTableName, " Included"), message=FALSE, warning=FALSE, results='asis'}
 if (length(names(tableData))>1 && !is.null(appearanceHeatmap$p)){
-  print(appearanceHeatmap$p)
+  if (is.character(appearanceHeatmap$p)){
+    cat(appearanceHeatmap$p)
+  } else{
+    print(appearanceHeatmap$p)
+  }
 }
 ```
 

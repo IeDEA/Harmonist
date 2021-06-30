@@ -11,7 +11,7 @@ observeEvent(input$yesRestart3,{
   useSampleData(FALSE)
   submitSuccess(NULL)
   tablesAndVariables <- NULL
-  groupByChoice("PROGRAM")
+  groupByChoice(defGroupVar)
   currentGroupSelection(NULL)
   finalGroupChoice(NULL)
   groupByInfo <- NULL
@@ -108,6 +108,39 @@ output$reportPage <- renderUI({
     "By default, the report summarizes the required variables in tblBAS."
   )
   
+  if (networkName == "IeDEA"){
+    dqMetricsUI <-       fluidRow(
+      box(
+        width = 10,
+        title = "Quality Metrics Report",
+        fluidRow(column(width = 8,
+                        tags$p("This report presents simple visualizations of three data quality metrics: DES compliance, logical consistency of data, and data completeness. Metrics are presented for each group and DES table in the submitted dataset.", defaultReportContent),
+                        radioButtons("dqVars",
+                                     "",
+                                     choiceValues = c("dqRequested", "dqAll"),
+                                     choiceNames = c(
+                                       dqRequestedVarText,
+                                       "Include all IeDEA DES variables in this dataset"
+                                     )),
+                        textInput("reportDesc",
+                                  "(Optional) Short title for report heading")),
+                 column(width = 2,
+                        img(src="reportIcon2.png", class="report_icon")
+                 )
+        ),
+        fluidRow(
+          column(
+            width = 2,
+            offset = 3,
+            downloadButton("DQMetrics", "Generate Quality Metrics Report")
+          )
+        )
+      )
+    )
+  } else {
+    dqMetricsUI <- fluidRow(tags$p(""))
+  }
+  
   return(
     tagList(
       tags$h3(class = "row_text title",tags$strong(span("STEP 3 ", class = "text-blue")),
@@ -118,64 +151,41 @@ output$reportPage <- renderUI({
         box(
           width = 10,
           title = "Data Summary Report",
-    
+          
           fluidRow(
             column(width = 8,
-                   tags$p("This customizable data report summarizes uploaded IeDEA DES tables and patient counts per table. Optional report content includes summary statistics, date histograms, and data quality check summaries. Reports can be generated for individual groups (e.g., sites, programs) or all groups combined."),
+                   tags$p("This customizable data report summarizes uploaded",
+                          networkName,
+                          projectDef$datamodel_abbrev,
+                          "tables and patient counts per table. Optional report content includes summary statistics, date histograms, and data quality check summaries. Reports can be generated for individual groups (e.g., sites, programs) or all groups combined."),
                    fluidRow(
                      column(width = 6,
-                  # tags$b("Customize report"),
-                   selectInput("reportType","File format for report",
-                               choices = c("PDF" = "pdf", "HTML" = "html")),
-                   uiOutput("programsToInclude"),
-                   #uiOutput("chooseMultipleGroups"),
-                   textInput("datasetDesc",
-                             "(Optional) Short title for report heading")
-            ),
-            column(width = 6,
-                   offset = 0,
-                   tags$b("Select report content"),
-                   checkboxInput("includeDataSummary", "Summary statistics of tables", value = TRUE),
-                   checkboxInput("includeHistograms", "Histograms of dates", value = TRUE),
-                   checkboxInput("includeErrorSummary", "Summary of data quality checks", value = TRUE),
-                   #fluidRow(uiOutput("histOptions"))                   
-                   uiOutput("histOptions")
-
-                  
-            ))),
+                            # tags$b("Customize report"),
+                            selectInput("reportType","File format for report",
+                                        choices = c("PDF" = "pdf", "HTML" = "html")),
+                            uiOutput("programsToInclude"),
+                            #uiOutput("chooseMultipleGroups"),
+                            textInput("datasetDesc",
+                                      "(Optional) Short title for report heading")
+                     ),
+                     column(width = 6,
+                            offset = 0,
+                            tags$b("Select report content"),
+                            checkboxInput("includeDataSummary", "Summary statistics of tables", value = TRUE),
+                            checkboxInput("includeHistograms", "Histograms of dates", value = TRUE),
+                            checkboxInput("includeErrorSummary", "Summary of data quality checks", value = TRUE),
+                            #fluidRow(uiOutput("histOptions"))                   
+                            uiOutput("histOptions")
+                            
+                            
+                     ))),
             column(width = 2,
                    img(src="reportIcon.png", class="report_icon")
             )),
           fluidRow(column(1, offset = 3, uiOutput("downloadReport")))
         )),
-      fluidRow(
-        box(
-          width = 10,
-          title = "Quality Metrics Report",
-          fluidRow(column(width = 8,
-                          tags$p("This report presents simple visualizations of three data quality metrics: DES compliance, logical consistency of data, and data completeness. Metrics are presented for each group and DES table in the submitted dataset.", defaultReportContent),
-                          radioButtons("dqVars",
-                                       "",
-                                       choiceValues = c("dqRequested", "dqAll"),
-                                       choiceNames = c(
-                                         dqRequestedVarText,
-                                         "Include all IeDEA DES variables in this dataset"
-                                       )),
-                          textInput("reportDesc",
-                                    "(Optional) Short title for report heading")),
-                   column(width = 2,
-                          img(src="reportIcon2.png", class="report_icon")
-                          )
-                   ),
-          fluidRow(
-            column(
-              width = 2,
-              offset = 3,
-                   downloadButton("DQMetrics", "Generate Quality Metrics Report")
-            )
-          )
-        )
-      ),
+      # if network is IeDEA, dqMetrics report option should be available
+      dqMetricsUI,
 # uncomment when prepared to add in africa dashboard option
      # fluidRow(
       #  box(

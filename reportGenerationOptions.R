@@ -2,7 +2,7 @@ finalGroupLevels <- reactive({
   if (is.null(uploadedTables())) return(NULL)
   groupVar <- finalGroupChoice()
   
-  groupNames <- as.character(sort(tableRowsByGroup()$tblBAS[[groupVar]]))
+  groupNames <- as.character(sort(tableRowsByGroup()[[indexTableName]][[groupVar]]))
   groupNames <- groupNames[groupNames != "Missing"]
   names(groupNames) <- groupNames
   return(groupNames)
@@ -59,7 +59,7 @@ createSelectProgramUI <- function(selectInputName){
   # that should only be included in All Programs report **May want to change this later** JUDY
   groupNames <- groupNames[groupNames != "All"]
   names(groupNames) <- groupNames
-  allGroups <- unique(na.omit(uploadedTables()$tblBAS[[groupVar]]))
+  allGroups <- unique(na.omit(uploadedTables()[[indexTableName]][[groupVar]]))
   allGroups <- allGroups[!is_blank_or_NA_elements(allGroups)]
   if (length(allGroups) > length(groupNames)){
     errorFreeGroups <- setdiff(allGroups, groupNames)

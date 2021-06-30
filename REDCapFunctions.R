@@ -200,7 +200,13 @@ getOneRecord <- function(projectToken, record_id_value, projectName = NULL, form
     return(result)
   } else {
     df <- jsonlite::fromJSON(httr::content(result, as = "text"))
-    return(df)
+    if (is_empty(df)){
+      return("")
+    } else if (nrow(df) == 1){
+      return(df)
+    } else {
+      return("")
+    }
   }
 }
 
@@ -301,3 +307,34 @@ getAllRegionInfo <- function(){
     return(regionData)
   }
 }
+
+getOneRegionInfo <- function(record_id_value){
+  # get region names and codes. If not successful, no problem; read in list of region names (keep updated)
+  result <- redcapPOST(url = redcap_url, encode = "form",
+                       body = list(token = tokenForHarmonist4, 
+                                   content = "record",
+                                   format = "json",
+                                   records = record_id_value
+                                   ),
+                       # body = list(token = tokenForHarmonist4,
+                       #             content = "record",
+                       #             format = "json"),
+                       .description = "Attempting to get regioninfo")
+  
+  if (inherits(result, "postFailure")) {
+    cat("REDCap POST failure accessing regions", "\n", file = stderr())
+    # POST failed, so use hard-coded values
+    region_names <-  c("Harmonist Test", "West Africa", "Central Africa", "NA-ACCORD",
+                    "CCASAnet", "Southern Africa", "East Africa", "Asia Pacific", "NIH", "External Users")
+    region_codes <- c("TT", "WA", "CA", "NA", "CN", "SA", "EA", "AP", "NH", "EX")
+    return(list(
+      region_name = region_names[[record_id_value]],
+      region_code = region_codes[[record_id_value]]
+    ))
+  } else {
+    # POST succeeded
+    regionData <- jsonlite::fromJSON(httr::content(result, as = "text"))
+    return(regionData)
+  }
+}
+

@@ -112,7 +112,7 @@ idleWarningModal <- function(idleTime){
   showModal(modalDialog(easyClose = FALSE,
                         title = paste0("Application idle ", idleTime, " minutes"),
                         wellPanel(
-                          tags$h3("Would you like to continue using the IeDEA Harmonist Data Toolkit?")
+                          tags$h3("Would you like to continue using the Harmonist Data Toolkit?")
                         ),
                         footer = tagList(
                           actionButton("idleContinue", label = "Continue working"),
@@ -138,7 +138,9 @@ informNoConcept <- function(mr){
   showModal(modalDialog(easyClose = FALSE,
                         title = paste0("Test data toolkit with sample data?"),
                         tags$p(paste0(
-                          "You are currently logged in through the IeDEA Hub to respond to Data Request ", mr,
+                          "You are currently logged in through the ",
+                          networkName,
+                          " Hub to respond to Data Request ", mr,
                           ". If you choose to test the data toolkit with sample data you will be logged out from the hub and will need to start a new session to upload your data for Data Request ", mr,".")),
                         footer = tagList(
                           actionButton("testContinue", label = "Log out of Hub and test with sample data"),

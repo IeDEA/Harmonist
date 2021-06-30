@@ -1,4 +1,4 @@
-findIt <- function(df, varName, tblBAS){
+findIt <- function(df, varName, indexTable){
   if (exists(varName, df)) {
     result <- df[[varName]]
     blankGroup <- safeTrimWS(result) == ""
@@ -6,8 +6,8 @@ findIt <- function(df, varName, tblBAS){
     result <- replace_na(result, "Unknown")
     return(result)
   }
-  if (exists("PATIENT", df)){
-    result <- tblBAS[match(df$PATIENT, tblBAS$PATIENT), varName]
+  if (exists(patientVar, df)){
+    result <- indexTable[match(df[[patientVar]], indexTable[[patientVar]]), varName]
     blankGroup <- safeTrimWS(result) == ""
     result[which(blankGroup)] <- NA
     result <- replace_na(result, "Unknown")
@@ -42,7 +42,7 @@ addPervasiveToErrorFrame <- function(groupVar, errorFrame, summaryOfErrors,
            severity = severity[[1]],
            errorCode = errorCode[[1]],
            id1_field = id1_fieldName[[1]],
-           id1 = paste(quantity, "patients in ", !!rlang::sym(groupVar))
+           id1 = paste(quantity, "records linked to patients in ", !!rlang::sym(groupVar))
     )
   
   index <- paste0(tableName[[1]], fieldName[[1]], "Pervasive", category[[1]])
@@ -56,20 +56,24 @@ addPervasiveToErrorFrame <- function(groupVar, errorFrame, summaryOfErrors,
 addGeneralError <- function(groupVar, 
                             errorFrame, field, tableName, errorType, errorCode, 
                             severity, message, quantity = 1){
-  newErrors <- list(
-    PROGRAM = "All", # or should this be NA
-    GROUP = "All",
-    table = tableName,
-    error_field = field,
-    error = errorType,
-    category = errorType,
-    severity = severity,
-    errorCode = errorCode,
-    description = message[[1]],
-    quantity = quantity
+  newErrors <- structure(
+    list(
+      "All", # defGroupVar (or should this be NA)
+      "All", # GROUP
+      tableName, # table
+      field, # error_field
+      errorType, # error
+      errorType, # category
+      severity, # severity
+      errorCode, # errorCode
+      message[[1]], # description
+      quantity # quantity
+    ),
+    names = c(defGroupVar, "GROUP", "table", "error_field", "error",
+              "category", "severity", "errorCode", "description", "quantity")
   )
   
-  if (groupVar == "PROGRAM"){
+  if (groupVar == defGroupVar){
     newErrors$GROUP <- NULL
   } else names(newErrors)[[2]] <- groupVar
   
@@ -82,14 +86,14 @@ addGeneralError <- function(groupVar,
 }
 
 
-addToErrorFrame <- function(tblBAS, groupVar, errorFrame, table, field, tableName, errorType, errorCode, severity, message, ...){ 
+addToErrorFrame <- function(indexTable, groupVar, errorFrame, table, field, tableName, errorType, errorCode, severity, message, ...){ 
   idList <- tableIDField[[tableName]]
   idColumns <- c()
   for (i in 1:length(idList)){
     idColumns <- c(idColumns, idFieldNames[[i]], idValueNames[[i]]) # idFieldNames, idValueNames in definitions.R
   }
   
-  groupColumns <- ifelse(groupVar == "PROGRAM", "PROGRAM", c("PROGRAM", groupVar))
+  groupColumns <- ifelse(groupVar == defGroupVar, defGroupVar, c(defGroupVar, groupVar))
   
   columnNames <- c(groupColumns, "table", idColumns, minimumErrorDetail, names(list(...))) #minimumErrorDetail in definitions.R
   numErrorRows <- nrow(table)
@@ -105,10 +109,10 @@ addToErrorFrame <- function(tblBAS, groupVar, errorFrame, table, field, tableNam
     print("making sure program included")
     
     if (!groupVar %in% names(summaryOfErrors)){
-      summaryOfErrors[[groupVar]] <- findIt(summaryOfErrors, groupVar, tblBAS = tblBAS)
+      summaryOfErrors[[groupVar]] <- findIt(summaryOfErrors, groupVar, indexTable = indexTable)
     }
-    if (!"PROGRAM" %in% names(summaryOfErrors)){
-      summaryOfErrors[["PROGRAM"]] <- findIt(summaryOfErrors, "PROGRAM", tblBAS = tblBAS)
+    if (!defGroupVar %in% names(summaryOfErrors)){
+      summaryOfErrors[[defGroupVar]] <- findIt(summaryOfErrors, defGroupVar, indexTable = indexTable)
     }
     
     summaryOfErrors <- summaryOfErrors %>%  
@@ -160,11 +164,11 @@ addToErrorFrame <- function(tblBAS, groupVar, errorFrame, table, field, tableNam
     newErrors[[idValue]] <- as.character(get(idVariable, table))
   }
   
-  # if PROGRAM and/or groupVar already exist in error table, add to frame
+  # if defGroupVar and/or groupVar already exist in error table, add to frame
   # Otherwise, will be added later to full dataframe
-  newErrors$PROGRAM <- findIt(table, "PROGRAM", tblBAS = tblBAS)
-  if (groupVar != "PROGRAM"){
-    newErrors[[groupVar]] <- findIt(table, groupVar, tblBAS = tblBAS)
+  newErrors[[defGroupVar]] <- findIt(table, defGroupVar, indexTable = indexTable)
+  if (groupVar != defGroupVar){
+    newErrors[[groupVar]] <- findIt(table, groupVar, indexTable = indexTable)
   }
   
   newErrors$error_field <- field
@@ -180,7 +184,7 @@ addToErrorFrame <- function(tblBAS, groupVar, errorFrame, table, field, tableNam
   if (exists(index, errorFrame)) {
     errorFrame[[index]] <- rbind(errorFrame[[index]], newErrors)
   } else errorFrame[[index]] <- newErrors   
-  
+  print("done adding error")
   return(errorFrame)
 }
 
@@ -215,7 +219,8 @@ checkCodedVariables <- function(errorFrame, resources){
     
     for (codedField in codedFieldNames){
       codeIndex <- as.numeric(tableDef[[tableName]]$variables[[codedField]]$code_list_ref)
-      codeList <- codes[[codeIndex]]
+      # if codes are not in sequential order, need character for codelist reference
+      codeList <- codes[[as.character(codeIndex)]]
       validCodes <- names(codeList)
       # all invalid codes should be indicated as invalid code in formattedTable
       badCodeIndices <- formattedTable[[codedField]] == "Invalid Code"
@@ -235,7 +240,7 @@ checkCodedVariables <- function(errorFrame, resources){
         # if number of bad codes is not excessive, add to errorFrame as usual
         if (nrow(badCodesRecords) < limitOnInvalidCodesToRecord){
           errorFrame <- addToErrorFrame(
-            resources$formattedTables$tblBAS,
+            resources$formattedTables[[indexTableName]],
             resources$finalGroupChoice, 
             errorFrame, badCodesRecords, codedField, tableName, 
             errorType = "Invalid Code", 
@@ -250,7 +255,7 @@ checkCodedVariables <- function(errorFrame, resources){
             filter(count <= limitOnInvalidCodesToRecord) %>% select(-count)
           
           if (nrow(nonExcessiveBadCodes) > 0){
-            errorFrame <- addToErrorFrame(resources$formattedTables$tblBAS,
+            errorFrame <- addToErrorFrame(resources$formattedTables[[indexTableName]],
                                           groupVar = groupBy,
                                           errorFrame = errorFrame,
                                           table = nonExcessiveBadCodes,
@@ -288,114 +293,6 @@ checkCodedVariables <- function(errorFrame, resources){
   return(errorFrame)
 }
 
-checkBPValues <- function(errorFrame, table, groupVar, resources){
-  tableName <- "tblLAB_BP"
-  bpMeas <- intersect(c("BP_SYS","BP_DIA"), names(table))
-  #if the table doesn't actually include any blood pressure results, return
-  if (is_empty(bpMeas)) return(errorFrame)
-  #if it does contain results, units column should be present. If no units column, 
-  # if (!exists("BP_U", table)){
-  #   #TYPE OF ERROR/WARNING HERE Judy
-  #   errorFrame <- addGeneralError(groupVar = groupVar, errorFrame = errorFrame,
-  #                                 field = "BP_U", tableName = tableName,
-  #                                 errorType = "Missing units column in tblLAB_BP",
-  #                                 errorCode = "3???",
-  #                                 severity = "Warning",
-  #                                 message = "Units should be provided for blood pressure measurements")
-  #   return(errorFrame)
-  # }
-  
-  # if we're continuing, we know that we have at least one blood pressure value column and we do have a 
-  # units column
-  # ### If BP_U is *required* in DES, we know that BP_U exists, required to proceed to dq checks
-  ###### but just in case BP_U later is NOT required, make sure BP_U column exists
-  #find records missing or invalid units
-  if (!exists("BP_U", table)) return(errorFrame)
-  
-  recordsMissingUnits <- table$BP_U == "Missing"
-  
-  if (any(recordsMissingUnits, na.rm = TRUE)){
-    message <- paste0("Valid units must be provided for blood pressure values.")
-    errorFrame <- addToErrorFrame(resources$formattedTables$tblBAS,
-                                  groupVar, errorFrame, 
-                                  table[which(recordsMissingUnits),],"BP_U", 
-                                  tableName, 
-                                  errorCode = "1.4", 
-                                  errorType = "Missing Units", 
-                                  severity = "Warning", message)
-  }
-  
-  #check BP values on records containing units
-  recordsWithUnits <- table[!recordsMissingUnits,]
-  for (units in names(BPLabLimits)){
-    unitLimits <- get(units, BPLabLimits)
-    upper <- unitLimits$upper
-    lower <- unitLimits$lower
-    unitCode <- unitLimits$unitCode
-    theseUnits <- recordsWithUnits %>% filter(BP_U==units)
-    for (labTest in bpMeas){
-      tooHighRecords <- theseUnits[[labTest]] > upper
-      if (any(tooHighRecords, na.rm=TRUE)){
-        message <- paste0("The maximum value allowed for ", labTest, " is ",upper,
-                          " when the units are ", units, 
-                          " as indicated by BP_U = ", unitCode, ".")
-        errorFrame <- addToErrorFrame(resources$formattedTables$tblBAS,
-                                      groupVar, errorFrame, theseUnits[tooHighRecords,], labTest, tableName, 
-                                      errorType = "Value Above Expected Range", 
-                                      errorCode = "2.2c", 
-                                      "Warning", message,
-                                      error_field2 = "BP_U", error2 = unitCode)
-        
-      }
-      recordsToCheck <- theseUnits[!tooHighRecords,]
-      tooLowRecords <- recordsToCheck[[labTest]] < lower
-      if (any(tooLowRecords, na.rm = TRUE)){
-        message <- paste0("The minimum value allowed for ", labTest, " is ",lower,
-                          " when the units are ", units, 
-                          " as indicated by BP_U = ", unitCode, ".")
-        errorFrame <- addToErrorFrame(resources$formattedTables$tblBAS,
-                                      groupVar, errorFrame, recordsToCheck[tooLowRecords,], labTest, tableName, 
-                                      "Value Below Expected Range", errorCode = "2.2c", 
-                                      "Warning", message, 
-                                      error_field2 = "BP_U", error2 = unitCode)
-      }
-    }
-  }
-  return(errorFrame)
-}
-
-checkCD4Values <- function(errorFrame, table, groupVar, resources){
-  tableName <- "tblLAB_CD4"
-  if (!exists("CD4_V", table)) return(errorFrame)
-  #### now that CD4_U is *required* we don't need to check for this
-  # now we know that cd4 values are present, in which case, units column should be present:
-  # if (!exists("CD4_U", table)){
-  #   errorFrame <- addGeneralError(groupVar = groupVar, errorFrame = errorFrame,
-  #                                 field = "CD4_U", tableName = tableName,
-  #                                 errorType = "Missing Units",
-  #                                 errorCode = "3",
-  #                                 severity = "Warning",
-  #                                 message = "Units should be provided for CD4 values")
-  #   return(errorFrame)
-  # }
-  
-  # if CD4_U is %, out of range values will be flagged later
-  # if CD4_U is cells/mm<sup>3</sup> then CD4_V shouldn't exceed upper limit defined in definitions.R
-  recordsToCheck <- table %>% filter(CD4_U == "cells/mm<sup>3</sup>") 
-  #negative values are ok: they indicate (less than) detection limit
-  tooHighRecords <- recordsToCheck %>% filter(CD4_V > CD4$upperLimit)
-  if (nrow(tooHighRecords)>0){
-    severity <- "Warning"
-    message <- paste0("CD4_V shouldn't exceed ", CD4$upperLimit, " when the unit = cells/mm3.")
-    errorFrame <- addToErrorFrame(resources$formattedTables$tblBAS,
-                                  groupVar, errorFrame, 
-                                  tooHighRecords, 
-                                  "CD4_V", "tblLAB_CD4", 
-                                  "Value Above Expected Range", 
-                                  errorCode = "2.2c", severity, message)
-  }
-  return(errorFrame)
-}
 
 
 checkValidRange <- function(errorFrame, groupVar, tableName, formattedTable, numericField, severity, resources){
@@ -405,10 +302,11 @@ checkValidRange <- function(errorFrame, groupVar, tableName, formattedTable, num
     formattedTable <- formattedTable %>% filter((.)[numericField] != limits$unknown)
   }
   tooHighRecords <- formattedTable %>% filter((.)[numericField] >limits$upper)
-  if ((numericField == "HEIGH") && (nrow(tooHighRecords) > 0.9*nrow(formattedTable))){
-    message <- paste0("HEIGH should be reported in meters. Your HEIGH values are greater than ", limits$upper, " and appear to be in cm or inches.")
+  if ((numericField == heightVar) && (nrow(tooHighRecords) > 0.9*nrow(formattedTable))){
+    message <- paste0(heightVar, " should be reported in meters. Your ", heightVar, " values are greater than ", limits$upper, " and appear to be in cm or inches.")
     errorFrame <- addGeneralError(groupVar,
-                                  errorFrame = errorFrame, field = numericField, tableName = tableName, 
+                                  errorFrame = errorFrame, 
+                                  field = numericField, tableName = tableName, 
                                   errorType = "Value Above Expected Range",
                                   errorCode = "2.2c", severity = "Error",
                                   message = message, 
@@ -422,14 +320,14 @@ checkValidRange <- function(errorFrame, groupVar, tableName, formattedTable, num
     if(exists("unknown",limits)){
       message <- paste0(message, " Note: The code for Unknown is ",limits$unknown, ".")
     }
-    errorFrame <- addToErrorFrame(resources$formattedTables$tblBAS,
+    errorFrame <- addToErrorFrame(resources$formattedTables[[indexTableName]],
                                   groupVar, errorFrame, tooHighRecords, numericField, tableName, 
                                   "Value Above Expected Range",errorCode = "2.2c", severity, message)
   }
   tooLowRecords <- formattedTable %>% filter((.)[numericField] < limits$lower)
   if (nrow(tooLowRecords) > 0){
     message <- paste0("The minimum value expected for ", numericField, " is ",limits$lower, limits$units, ".")
-    errorFrame <- addToErrorFrame(resources$formattedTables$tblBAS,
+    errorFrame <- addToErrorFrame(resources$formattedTables[[indexTableName]],
                                   groupVar, errorFrame, tooLowRecords, numericField, tableName, 
                                   "Value Below Expected Range",errorCode = "2.2c", severity, message)
   }
@@ -458,7 +356,7 @@ checkNumericValues <- function(errorFrame, resources){
         if (nrow(badRecords)>0){
           message <- paste0("Numeric value required for ", numericField)
           severity <- "Error"
-          errorFrame <- addToErrorFrame(resources$formattedTables$tblBAS,
+          errorFrame <- addToErrorFrame(resources$formattedTables[[indexTableName]],
                                         resources$finalGroupChoice, errorFrame, 
                                         badRecords, numericField, tableName, 
                                         "Invalid format",
@@ -471,7 +369,7 @@ checkNumericValues <- function(errorFrame, resources){
       if (numericField %in% names(numericLimits)){
         errorFrame <- checkValidRange(errorFrame, resources$finalGroupChoice, tableName, formattedTable[!potentialBadRecords,], numericField, "Warning", resources)
       }
-      # if excessive numeric range errors like HEIGH all in cm then break *both* loops **JUDY could this happen now?
+      # if excessive numeric range errors like heightVar all in cm then break *both* loops **JUDY could this happen now?
       if (is.null(errorFrame)) break
     }
     if (is.null(errorFrame)) break
@@ -479,62 +377,7 @@ checkNumericValues <- function(errorFrame, resources){
   return(errorFrame)
 }
 
-# Check for records with lab values but missing lab units.
-checkLabValues <- function(errorFrame, resources){
-  if ("tblLAB_BP" %in% resources$tablesAndVariables$tablesToCheck){
-    errorFrame <- checkBPValues(errorFrame, resources$formattedTables$tblLAB_BP, resources$finalGroupChoice, resources)
-  }
-  
-  if ("tblLAB_CD4" %in% resources$tablesAndVariables$tablesToCheck){
-    errorFrame <- checkCD4Values(errorFrame, resources$formattedTables$tblLAB_CD4, resources$finalGroupChoice, resources)
-  }
-  
-  labTablesToCheck <- intersect(labTablesRequiringUnits, resources$tablesAndVariables$tablesToCheck)
-  
-  for (tableName in labTablesToCheck){
-    thisTable <- get(tableName, resources$formattedTables)
-    labValue <- names(thisTable)[endsWith(names(thisTable),"_V")]
-    # if no labValue field in table, check next table
-    if (length(labValue)==0) next
-    labName <- strsplit(labValue,"_V")[[1]]
-    if (exists(paste0(labName,"_U"), thisTable)){
-      labUnits <- paste0(labName,"_U")
-      # since using formatted version of table, and since units are coded values, any missing 
-      # units are labeled "Missing". First find the records with non-missing lab values.
-      # Can probably replace with is.na since lab values are always numeric... JUDY
-      recordsMissingUnits <- thisTable %>% 
-        filter(!is_blank_or_NA_elements(!! rlang::sym(labValue) )) %>% 
-        filter(!! rlang::sym(labUnits) == "Missing")
-      
-      if (nrow(recordsMissingUnits)>0){
-        severity <- "Warning"
-        message <- "Lab Units must be provided for lab values."
-        errorFrame <- addToErrorFrame(resources$formattedTables$tblBAS,
-                                      resources$finalGroupChoice,
-                                      errorFrame, 
-                                      recordsMissingUnits, 
-                                      labUnits, tableName, 
-                                      "Missing Units",
-                                      errorCode = "1.4", severity, message, 
-                                      error_field2 = labValue, 
-                                      error2 = as.character(recordsMissingUnits[,labValue]))
-      }
-      recordsAboveRangePercent <- thisTable %>%
-        filter(!! rlang::sym(labUnits) == "%") %>% 
-        filter(!! rlang::sym(labValue) > 100)
-      if (nrow(recordsAboveRangePercent)>0){
-        severity <- "Error"
-        message <- paste0(labValue," shouldn't exceed 100 when the units = %.")
-        errorFrame <- addToErrorFrame(resources$formattedTables$tblBAS,
-                                      resources$finalGroupChoice, errorFrame, 
-                                      resources$uploadedTables[[tableName]][recordsAboveRangePercent$recordIndex, ],
-                                      labValue, tableName, "Value Above Expected Range", 
-                                      errorCode = "2.2c", severity, message)
-      }
-    }
-  }
-  return(errorFrame)
-}
+
 
 # findMissingRequiredValues adds an error to errorFrame for missing required variables only
 findMissingRequiredValues <- function(errorFrame, resources){
@@ -556,12 +399,12 @@ findMissingRequiredValues <- function(errorFrame, resources){
       } else badRecords <- is_blank_or_NA_elements(uploadedTable[[fieldName]])
       
       # if this is a primary key for this table, it is listed first in the required variables
-      # and is error 1.1a. Missing PROGRAM in tblBAS is 1.1c.
+      # and is error 1.1a. Missing defGroupVar in indexTableName is 1.1c.
       # Other missing required key variables are error 1.4a
       if (fieldName == requiredVariables[[1]]){
         errorCode <- "1.1a"
         severity <- "Critical"
-      } else if (fieldName == "PROGRAM" && tableName == "tblBAS"){
+      } else if (fieldName == defGroupVar && tableName == indexTableName){
         errorCode <- "1.1c"
         severity <- "Critical"
       } else {
@@ -591,7 +434,7 @@ findMissingRequiredValues <- function(errorFrame, resources){
       else if (any(badRecords)){
         badRecords <- which(badRecords)
         print("found missing")
-        errorFrame <- addToErrorFrame(resources$formattedTables$tblBAS,
+        errorFrame <- addToErrorFrame(resources$formattedTables[[indexTableName]],
                                       resources$finalGroupChoice, errorFrame, 
                                       resources$formattedTables[[tableName]][badRecords,], 
                                       fieldName, tableName,
@@ -793,22 +636,22 @@ summarizeUnknownCodes <- function(unknownByGroup){
 }
 
 PatientIDChecks <- function(errorFrame, resources){
-  validPATIENTs <- resources$formattedTables$tblBAS$PATIENT
+  validPatients <- resources$formattedTables[[indexTableName]][[patientVar]]
   for (tableName in resources$tablesAndVariables$tablesToCheckWithPatientID){
     currentTable <- resources$formattedTables[[tableName]]
-    badRecords <- !(currentTable[,"PATIENT"] %in% validPATIENTs)
+    badRecords <- !(currentTable[,patientVar] %in% validPatients)
     if (any(badRecords[!is.na(badRecords)])){
-      # missing PATIENT id is detected by a different check so ignore blank or NA
-      badRecordTable <- currentTable[which(badRecords),] %>% filter(!is_blank_or_NA_elements(PATIENT))
+      # missing patientVar id is detected by a different check so ignore blank or NA
+      badRecordTable <- currentTable[which(badRecords),] %>% filter(!is_blank_or_NA_elements(!!patientVarSym))
       # now check to see if any remaining records with invalid patient id
       if (nrow(badRecordTable) == 0) return(errorFrame)
-      errorFrame <- addToErrorFrame(resources$formattedTables$tblBAS,
+      errorFrame <- addToErrorFrame(resources$formattedTables[[indexTableName]],
                                     resources$finalGroupChoice, errorFrame, 
-                                    badRecordTable, "PATIENT", tableName,
-                                    "Invalid PATIENT ID", 
+                                    badRecordTable, patientVar, tableName,
+                                    paste0("Invalid ", patientVar, " ID"), 
                                     errorCode = "1.1b", 
                                     "Critical", 
-                                    "No record was found for this PATIENT in tblBAS. Every PATIENT should have an entry in tblBAS.")
+                                    paste0("No record was found for this ", patientVar, " in ", indexTableName, ". Every ", patientVar, " should have an entry in ", indexTableName, "."))
     }
   }
   return(errorFrame)
@@ -824,9 +667,10 @@ duplicateRecordChecks <- function(errorFrame, resources){
       # this means there are no duplicate combinations of key identifiers
       next
     }
-    print("before dupRows")
+    print(paste0("before dupRows", Sys.time()))
     duplicates <- table %>% group_by_all() %>% summarise(n = n()) %>% ungroup() %>% filter(n > 1)
-    print("after dupRows")
+    print(paste0("after dupRows", Sys.time()))
+    
     if (nrow(duplicates) == 0) { 
       print("IT IS POSSIBLE TO GET HERE")
       next
@@ -834,11 +678,11 @@ duplicateRecordChecks <- function(errorFrame, resources){
     print("Duplicates found")
     print(nrow(duplicates))
     #otherwise, we know there are duplicates
-    # check first for tables with PATIENT as unique identifier; a duplicate record in that case 
+    # check first for tables with patientVar as unique identifier; a duplicate record in that case 
     # is an error that requires explanation
-    if ((length(idFields) == 1) && (idFields[[1]] == "PATIENT")){
+    if ((length(idFields) == 1) && (idFields[[1]] == patientVar)){
       errorCode <- "1.1d"
-      message <- "PATIENT is the only identifier in this table; every PATIENT value should be unique"
+      message <- paste0(patientVar, " is the only identifier in this table; every ", patientVar, " value should be unique")
       severity <- "Critical"
     } else {
       errorCode <- "1.8"
@@ -850,7 +694,7 @@ duplicateRecordChecks <- function(errorFrame, resources){
     }
     
     print("about to add duplicates to error frame")
-    errorFrame <- addToErrorFrame(resources$formattedTables$tblBAS,
+    errorFrame <- addToErrorFrame(resources$formattedTables[[indexTableName]],
                                   resources$finalGroupChoice, errorFrame, duplicates, 
                                   idFields[1], tableName, 
                                   "Duplicate Record", 
@@ -865,81 +709,56 @@ duplicateRecordChecks <- function(errorFrame, resources){
 
 
 checkForDecreasingHeight <- function(errorFrame, resources) {
-  if (!("tblVIS" %in% resources$tablesAndVariables$tablesToCheck))
-    return(errorFrame)
   
-  tblVIS <- resources$formattedTables$tblVIS
-  if (!("HEIGH" %in% names(tblVIS)))
+  if (!heightVar %in% names(numericLimits)){
     return(errorFrame)
-  tblVIS <- tblVIS %>% filter(!is.na(HEIGH)) %>% 
-    filter(HEIGH != numericLimits$HEIGH$unknown) %>% 
-    filter(HEIGH !="") %>% filter(HEIGH < numericLimits$HEIGH$upper) #only include valid heights
+  }
   
-  temp <- arrange(tblVIS, VIS_D) %>%  arrange(PATIENT) %>% 
-    group_by(PATIENT) %>% mutate(checkIt = c(0,diff(HEIGH))) 
+  if (!heightTableName %in% names(resources$formattedTables)){
+    return(errorFrame)
+  }
+  
+  if (!heightVar %in% resources$tablesAndVariables$matchingColumns[[heightTableName]]){
+    return(errorFrame)
+  }
+  
+  if (!heightDateVar %in% resources$tablesAndVariables$matchingColumns[[heightTableName]]){
+    return(errorFrame)
+  }
+  
+  heightTable <- resources$formattedTables[[heightTableName]]
+  
+  heightTable <- heightTable %>% filter(!is.na(!!heightVarSym)) %>% 
+    filter(!!heightVarSym != numericLimits[[heightVar]]$unknown) %>% 
+    filter(!!heightVarSym !="") %>% filter(!!heightVarSym < numericLimits[[heightVar]]$upper) #only include valid heights
+  
+  temp <- arrange(heightTable, !!rlang::sym(heightDateVarSym)) %>%  
+    arrange(!!patientVarSym) %>% 
+    group_by(!!patientVarSym) %>% mutate(checkIt = c(0,diff(!!heightVarSym))) 
+  
+  if (nrow(temp) == 0){
+    return(errorFrame)
+  }
   
   potentialBadRecords <- (temp$checkIt < -1*maxHeightDecreaseInM)
   
   if (any(potentialBadRecords)) {
     badRecords <- which(potentialBadRecords)
     message <- paste("Height should not decrease significantly over time. The height on this date was less than on the previous date. On ",
-                     temp$VIS_D[badRecords-1]," this patient's height was ", temp$HEIGH[badRecords-1], "m.")
+                     temp[[heightDateVar]][badRecords-1]," this patient's height was ", temp[[heightVar]][badRecords-1], "m.")
     
-    errorFrame <- addToErrorFrame(resources$formattedTables$tblBAS,
-                                  resources$finalGroupChoice, errorFrame, temp[badRecords,], "HEIGH", 
-                                  "tblVIS", "Conflicting Height Data",
+    errorFrame <- addToErrorFrame(resources$formattedTables[[indexTableName]],
+                                  resources$finalGroupChoice, errorFrame, temp[badRecords,], heightVar, 
+                                  heightTableName, "Conflicting Height Data",
                                   errorCode = "2.3f", "Warning", message)
   }
   return(errorFrame)
 }
 
-checkForConflictingStages <- function(errorFrame, stageVariable, resources){
-  # if all xxx_STAGE values are Missing or Invalid Code, exit function
-  stages <- resources$formattedTables$tblVIS[[stageVariable]]
-  rowsToCheck <- which(!(stages %in% c("Missing", "Invalid Code", "Unknown")))
-  
-  if (is_empty(rowsToCheck)){
-    return(errorFrame)
-  }
-  
-  tblVIS <- resources$formattedTables$tblVIS[rowsToCheck,]
-  # only include records with exact dates or _A blank ("Missing").
-  if ("VIS_D_A" %in% names(tblVIS)){
-    tblVIS <- tblVIS %>% filter(VIS_D_A %in% c("Missing","Exact to the date"))
-  }
-  
-  tblVIS <-  tblVIS %>% 
-    select(PATIENT, VIS_D, !!stageVariable)
-  
-  # if the number of unique combinations of PATIENT and VIS_D is the same as the number of unique
-  # rows in the table, that means that no single visit date has different stage codes
-  if (uniqueN(tblVIS[,c("PATIENT","VIS_D")]) == uniqueN(tblVIS)) {
-    return(errorFrame)
-  }
-  
-  # the distinct function isolates records with same PATIENT and VIS_D but different _STAGE
-  badRecords <- tblVIS %>% 
-    distinct() %>% 
-    group_by(PATIENT, VIS_D) %>% 
-    mutate(n=n()) %>% 
-    filter(n > 1) %>% 
-    group_by(PATIENT, VIS_D, n) %>% 
-    summarise_at(vars(!!stageVariable),
-                 function(x) {
-                   stages <- paste(as.numeric(x), collapse = ",") # create list of all stages on this date
-                 }) %>% 
-    mutate(message = paste0("This patient had ", n, " conflicting ", !!stageVariable, " reports on the same date." ))
-  
-  
-  if (nrow(badRecords) >0){
-    errorFrame <- addToErrorFrame(resources$formattedTables$tblBAS,
-                                  resources$finalGroupChoice, errorFrame, 
-                                  badRecords, stageVariable, "tblVIS", 
-                                  paste0("Conflicting ", stageVariable, " on single date"),
-                                  errorCode = "2.3b", "Warning", badRecords$message)
-  }
-  return(errorFrame)
-}
+
+
+
+
 
 findTableRows <- function(tableNameVector){
   tableNames <- unique(tableNameVector)
@@ -1017,161 +836,26 @@ summarizeErrors <- function(errorFrame, tableData){
 }
 
 
-check_DAgreementWith_Y <- function(errorFrame, resources){
-  for (tableName in resources$tablesAndVariables$tablesToCheck){
-    table <- resources$formattedTables[[tableName]]
-    var_Y <- unlist(strsplit(names(table)[endsWith(names(table),"_Y")],"_Y"), use.names = FALSE)
-    var_D <- unlist(strsplit(names(table)[endsWith(names(table),"_D")],"_D"), use.names = FALSE)
-    var_Y_D <- var_Y[var_Y %in% var_D]
-    for (variable in var_Y_D){
-      yVarName <- paste0(variable,"_Y")
-      dateVarName <- paste0(variable, "_D")
-      #error scenario 1: If a the _D field has a date but the _Y is anything other than 1 (Yes)
-      badRecords <- table %>% filter(!is.na(!!rlang::sym(dateVarName))) %>% 
-        filter(!(!!rlang::sym(yVarName)=="Yes")) %>% pull(recordIndex)
-      if(length(badRecords)>0){
-        message <- paste0("If a date is recorded for ", dateVarName," then ",
-                          yVarName, " must have a value of 1 (Yes).")
-        errorFrame <- addToErrorFrame(resources$formattedTables$tblBAS,
-                                      resources$finalGroupChoice, errorFrame, 
-                                      resources$uploadedTables[[tableName]][badRecords,], 
-                                      dateVarName, 
-                                      tableName, 
-                                      paste0("Y/N data in conflict with date"),# (", yVarName, " not YES when date provided for ", dateVarName, ")"), 
-                                      errorCode = "2.3c",
-                                      "Error", message, 
-                                      error_field2 = yVarName, 
-                                      error2 = as.character(resources$uploadedTables[[tableName]][badRecords,yVarName]))
-      }
-      # JUDY: revisit -- check with Bev
-      # error scenario 2: If a the _Y field is Yes but the _D field is blank
-      # for now I am removing that check-- it seems common to have a value for AIDS_Y with no AIDS_D, etc
-      
-    }
-  }
-  return(errorFrame)
-}
-
-check_RSagreementWithDates <- function(errorFrame, resources){
-  for (tableName in resources$tablesAndVariables$tablesToCheck){
-    formattedTable <- resources$formattedTables[[tableName]]
-    table <- resources$uploadedTables[[tableName]]
-    idFields <- tableIDField[[tableName]]
-    varNames <- names(formattedTable)
-    allvar_RS <- endsWith(varNames, "_RS")
-    if (!any(allvar_RS, na.rm = TRUE)) next
-    # now we know that at least one REASON variable exists
-    # check first for START_RS/SD pair, then _RS/_SD or _D pair
-    for (var_RSName in varNames[allvar_RS]){
-      if (endsWith(var_RSName, "START_RS")){
-        baseVarName <- str_sub(var_RSName, end = -(1 + nchar("START_RS")))
-        dateName <- paste0(baseVarName, "_SD")
-      } else if (endsWith(var_RSName, "_RS")){
-        baseVarName <- str_sub(var_RSName, end = -(1 + nchar("_RS")))
-        endDateNames <- paste0(baseVarName, c("_ED", "_D"))
-        if (!any(endDateNames %in% varNames)) {
-          dateName <- NULL
-        } else {
-          dateName <- endDateNames[which(endDateNames %in% varNames)][[1]] #shouldn't be more than 1! but _ED best
-        }
-      }
-      if (is.null(dateName) || (!dateName %in% varNames)) next
-      # now we know a date/reason pair exists: var_RSName, dateName
-      # find records in formattedTable where RS is *not* missing or Unknown but the date *is* missing 
-      
-      badTable <- formattedTable %>% filter(! (!!rlang::sym(var_RSName) %in% c("Missing", "Unknown"))) %>% 
-        filter(is.na(!!rlang::sym(dateName)))
-      
-      if (nrow(badTable) == 0) next
-      # now we know bad records probably exist but we shouldn't flag them if a date was entered 
-      # but was in the wrong format, etc.To confirm that we need to check those records in the original,
-      # unformatted data table:
-      originalBadData <- table[badTable$recordIndex,]
-      
-      notBlankDates <- !is_blank_or_NA_elements(originalBadData[[dateName]])
-      if (all(notBlankDates)) next
-      if (any(notBlankDates, na.rm = TRUE)){
-        originalBadData <- originalBadData[which(!notBlankDates),]
-      }
-      
-      if (nrow(badTable) > 0){
-        message <- paste0("If a reason is recorded for ", var_RSName, " then ",
-                          dateName, " should not be blank.")
-        errorFrame <- addToErrorFrame(resources$formattedTables$tblBAS,
-                                      resources$finalGroupChoice, 
-                                      errorFrame, 
-                                      originalBadData, 
-                                      var_RSName, 
-                                      tableName, "Reason provided but date missing",
-                                      errorCode = "2.3d", "Error", message, 
-                                      error_field2 = dateName, 
-                                      error2 = as.character(originalBadData$dateName))
-      }
-    }
-  }
-  return(errorFrame)
-}
-
-
-findPatientsMissingFromtblART <- function(errorFrame, resources){
-  if (!"tblART" %in% resources$tablesAndVariables$tablesToCheck) return(errorFrame)
-  if (!exists("RECART_Y", resources$formattedTables$tblBAS)) return(errorFrame)
-  patientsOnART <- resources$formattedTables$tblBAS %>% 
-    filter(RECART_Y == "Yes") %>% select(PATIENT, recordIndex)
-  
-  patientsMissing <- !patientsOnART$PATIENT %in% resources$formattedTables$tblART$PATIENT
-  
-  if (!any(patientsMissing)) return(errorFrame)
-  
-  # add entries to errorFrame for patients that are listed as RECART_Y == Yes 
-  # but with no entry in tblART
-  
-  badRecords <- resources$uploadedTables$tblBAS[patientsOnART$recordIndex[which(patientsMissing)],]
-  message <- "This patient is listed in tblBAS as recieving ART (RECART_Y=1) but has no entry in tblART"
-  errorFrame <- addToErrorFrame(resources$formattedTables$tblBAS,
-                                resources$finalGroupChoice, errorFrame,
-                                badRecords, "RECART_Y", "tblBAS", 
-                                "Conflict between RECART_Y and tblART",
-                                errorCode = "2.3e",
-                                "Warning", message)
-  return(errorFrame)
-}
-
-
-#NOT CURRENTLY IMPLEMENTED
-checkPatientVisits <- function(errorFrame, resources){
-  tblVIS <- resources$formattedTables$tblVIS
-  badRecords <- tblVIS %>% group_by(PATIENT) %>%
-    dplyr::summarize(numVisits = n()) %>% ungroup() %>% 
-    filter(numVisits < 2)
-  
-  warnPatients <- resources$formattedTables$tblBAS[which(resources$formattedTables$tblBAS$PATIENT %in% badRecords$PATIENT),]
-  errorFrame <- addToErrorFrame(resources$formattedTables$tblBAS,
-                                resources$finalGroupChoice, errorFrame, warnPatients, "PATIENT", 
-                                "tblBAS", "PATIENT with < 2 visit dates",
-                                errorCode = "3", "Warning", 
-                                "This patient has < 2 visit dates recorded in tblVIS.")
-  return(errorFrame)
-}
 
 
 invalidProgram <- function(errorFrame, resources){
   ### JUDY add check for PROGRAM in tblCENTER
-  if ( ("PROGRAM" %in% names(resources$uploadedTables[["tblBAS"]]))
-       & ("tblPROGRAM" %in% resources$tablesAndVariables$tablesToCheck) ){
-    # if you get to this point there is at least one complete entry for PROGRAM in tblPROGRAM but to be on the safe side...
-    validPrograms <- na.omit(unique(resources$formattedTables$tblPROGRAM$PROGRAM))
+  if ( (defGroupVar %in% names(resources$uploadedTables[[indexTableName]]))
+       & (defGroupTableName %in% resources$tablesAndVariables$tablesToCheck) ){
+    # if you get to this point there is at least one complete entry for defGroupVar in defGroupTable but to be on the safe side...
+    validPrograms <- na.omit(unique(resources$formattedTables[[defGroupTableName]][[defGroupVar]]))
     if (length(validPrograms) == 0){
       return(errorFrame)
     }
-    badPrograms <- resources$uploadedTables[["tblBAS"]] %>% 
-      select(PATIENT, PROGRAM) %>% 
-      filter(!(PROGRAM %in% validPrograms)) 
+    badPrograms <- resources$uploadedTables[[indexTableName]] %>% 
+      select(!!patientVarSym, defGroupVarSym) %>% 
+      filter(!(!!defGroupVarSym %in% validPrograms)) 
     if (nrow(badPrograms) > 0){
-      message <- paste0("There is no entry for PROGRAM = ", badPrograms$PROGRAM, " in tblPROGRAM.")
-      errorFrame <- addToErrorFrame(resources$formattedTables$tblBAS,
+      message <- paste0("There is no entry for ", defGroupVar, " = ", badPrograms[[defGroupVar]],
+                        " in ", defGroupTableName, ".")
+      errorFrame <- addToErrorFrame(resources$formattedTables[[indexTableName]],
                                     resources$finalGroupChoice, errorFrame, badPrograms, 
-                                    "PROGRAM", "tblBAS", "Invalid PROGRAM", 
+                                    defGroupVar, indexTableName, paste0("Invalid ", defGroupVar), 
                                     errorCode = "1.7", "Error", message)
     }
   }
@@ -1190,6 +874,19 @@ divideErrorsByTable <- function(errorFrame){
   return(errorFrameByTable)
 }
 
+# function to create patient appearance summary data frame
+initializeAppearanceSummary <- function(groupVar, programNames,tableNames){
+  rows <- length(programNames)* length(tableNames)
+  x <- data.frame(
+    "GROUP" = character(rows),
+    "table" = character(rows),
+    "number" = numeric(rows),
+    "percent" = numeric(rows),
+    stringsAsFactors = FALSE)
+  names(x)[[1]] <- groupVar
+  return(x)
+}
+
 # Create a table of the number of VALID patients included in each table
 findPatients <- function(formattedTables, tablesToCheckWithPatientID, groupNames, groupVar){
 #  tablesToCheck <- intersect(tablesToCheck, patientShouldAppearInThese)
@@ -1202,13 +899,13 @@ findPatients <- function(formattedTables, tablesToCheckWithPatientID, groupNames
     appearanceSummary <- initializeAppearanceSummary(groupVar, groupNames, tablesToCheckWithPatientID)
     
     for (groupName in groupNames){
-      patientsInGroup <- formattedTables$tblBAS$PATIENT[formattedTables$tblBAS[[groupVar]] == groupName]
+      patientsInGroup <- formattedTables[[indexTableName]][[patientVar]][formattedTables[[indexTableName]][[groupVar]] == groupName]
       numberOfPatientsInGroup <- length(patientsInGroup)
       for (tableName in tablesToCheckWithPatientID){
         row <- row+1
         appearanceSummary[row, groupVar] <- groupName
         appearanceSummary[row, "table"] <- tableName
-        patientIDsInTable <- sum((patientsInGroup %in% formattedTables[[tableName]][["PATIENT"]]), na.rm = TRUE)
+        patientIDsInTable <- sum((patientsInGroup %in% formattedTables[[tableName]][[patientVar]]), na.rm = TRUE)
         percent <-  round(100*patientIDsInTable/numberOfPatientsInGroup,1) 
         appearanceSummary[row, "number"] <- patientIDsInTable
         appearanceSummary[row, "percent"] <- percent

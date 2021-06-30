@@ -93,34 +93,44 @@ unrecognizedVariables <- function(){
 output$groupByMenuUI <- renderUI({
   groupOptions <- groupByInfo()
   if (is.null(groupOptions$otherGroupOptions)){
-    groups <- "PROGRAM"
+    groups <- defGroupVar
     message <- tagList(
-      tags$p("For reporting purposes your dataset will be grouped by the variable PROGRAM:"),
+      tags$p("For reporting purposes your dataset will be grouped by the variable",
+             defGroupVar),
+
       makeBulletedList(groupOptions$programs),
-      tags$em("If you prefer that your data are grouped differently for reports, please include that variable in tblBAS and upload your revised dataset.")
+      tags$em("If you prefer that your data are grouped differently for reports,", 
+              "please include that variable in",
+              indexTableName,
+              "and upload your revised dataset.")
     )
     return(message)
   }
 
   if (is.null(formattedTables())){
     groupVar <- currentGroupSelection()
-    if (is.null(groupVar)) groupVar <- "PROGRAM"
-    groupNames <- switch(groupVar, 
-                          "PROGRAM" = sort(groupOptions$programs),
-                          sort(groupOptions$otherGroupOptions[[groupVar]]$levels)
-                          )
+    if (is.null(groupVar)) groupVar <- defGroupVar
+    
+    if (groupVar == defGroupVar){
+      groupNames <- sort(groupOptions$programs)
+    } else {
+      groupNames <- sort(groupOptions$otherGroupOptions[[groupVar]]$levels)
+    }
     
     message <- tagList(
       tags$p("Your data will be grouped by", tags$b(groupVar),"for reporting into the following",
              paste0(makeItPluralOrNot("group", length(groupNames)), ":")),
       makeBulletedList(groupNames),
       tags$br(),
-      tags$em("To group by a different variable, choose from the list below of alternate grouping variables found in your tblBAS file or upload a revised dataset that includes the desired grouping variable in tblBAS."
+      tags$em("To group by a different variable, choose from the list below of alternate grouping variables found in your",
+              indexTableName,
+              "file or upload a revised dataset that includes the desired grouping variable in",
+              indexTableName
       ),
       tags$br(),
       selectInput("groupBySelect", 
                   "Grouping variables:", 
-                  c("PROGRAM", names(groupOptions$otherGroupOptions)),
+                  c(defGroupVar, names(groupOptions$otherGroupOptions)),
                   selected = groupVar)
     )
     return(message)
@@ -128,13 +138,16 @@ output$groupByMenuUI <- renderUI({
   
   else {
     groupVar<- finalGroupChoice()
-    if (groupVar == "PROGRAM") groupNames <- groupOptions$programs
+    if (groupVar == defGroupVar) groupNames <- groupOptions$programs
     else groupNames <- groupOptions$otherGroupOptions[[groupVar]]$levels
     tagList(
       tags$p("Your data will be grouped for reporting purposes by", tags$b(groupVar)),
       makeBulletedList(groupNames),
       tags$br(),
-      tags$em("Data checks are complete and grouped by ", groupVar, ". Upload your dataset again to choose a different grouping variable. Grouping variables must be included in tblBAS.")
+      tags$em("Data checks are complete and grouped by ", groupVar, 
+              ". Upload your dataset again to choose a different grouping variable.", 
+              "Grouping variables must be included in",
+              indexTableName)
     )
   }
   
@@ -212,7 +225,12 @@ output$uploadIntro <- renderUI({
             " Upload files", backToHubMessage()),
     
     tags$h5(class = "row_text subtitle", 
-            "Choose the files containing your IeDEA tables to check for data quality. After files are uploaded, review the table summarizing uploaded files and variables.")
+            paste0(
+              "Choose the files containing your ",
+              networkName,
+              " tables to check for data quality. After files are uploaded, review the table summarizing uploaded files and variables."
+              )
+    )
   )
 })
 
@@ -251,21 +269,22 @@ getPreferredDataFormats <- function(concept){
 }
 
 getContactDisplay <- function(contact, datacontactFlag = FALSE){
+  # datacontactFlag indicates adding "Data Contact" in italics after the email link
   if (is_blank(contact)) return(NULL)
-  regionNum <- as.numeric(contact$person_region)
-  regionCode <- regionData$region_code[[regionNum]]
+  regionCode <- hubInfo$userDetails$regionCode
   name <- paste(contact$firstname, contact$lastname, paste0("(", regionCode,")"))
+  # in case Institution field is blank in REDCap:
+  if (safeTrimWS(contact$institution) == ""){
+    institution <- ""
+  } else {
+    institution <- paste0(", ", contact$institution)
+  }
+  
   if (datacontactFlag){
     displayText <- 
       tags$li(a(name, href=paste0("mailto:", contact$email), target="_blank"),
-              em("(Data contact),"), contact$institution)
+              em("(Data contact)"), institution)
   } else {
-    # in case Institution field is blank in REDCap:
-    if (safeTrimWS(contact$institution) == ""){
-      institution <- ""
-    } else {
-      institution <- paste0(", ", contact$institution)
-    }
     displayText <- 
       tags$li(a(name, href=paste0("mailto:", contact$email), target="_blank"),
               institution)
@@ -275,8 +294,9 @@ getContactDisplay <- function(contact, datacontactFlag = FALSE){
 
 # Show user details about the current data request
 dataRequestInfo <- reactive({
-      
+  if (projectDef$hub_y == 0) return(NULL)
   if (!hubInfo$fromHub){
+    # at this point this is specific to the IeDEA Hub
     box(
       collapsible = TRUE,
       collapsed = collapseStatus$noActive,
@@ -288,7 +308,6 @@ dataRequestInfo <- reactive({
         tags$p("You may select an active data request on the IeDEA Hub", a(" Submit Data", href="http://iedeahub.org", target="_blank")," page.")
       )
     )
-    # )
   }
   else {
     req(userDetails())
@@ -385,6 +404,7 @@ output$sopFinal <- downloadHandler(
 
 output$uploadMissingSummary <- renderUI({
   if (resetFileInput$reset) return(NULL)
+  if (!hubInfo$fromHub) return(NULL)
   if (is.null(uploadList())) return(NULL)
   if (is.null(uploadedTables())) return(NULL)
   if (is.null(uploadList()$MissingTables) &&
@@ -438,15 +458,22 @@ output$uploadSummary <- renderUI({
   # if the uploaded dataset included deprecated variables, add explanatory line below table
 
     if (tablesAndVariables$details$deprecated_count > 0){
-      deprecatedMessage <- div(
-        tags$em(
-          tags$span("Note: Deprecated variables are shown in red. See", 
-                    
-                    tags$a(tags$u("iedeades.org"), href="http://iedeades.org", 
-                           target="_blank", style= "color: #dd4b39"),
-                    "for details.", style= "color: #dd4b39")
+      if (projectDef$datamodel_url_y == 1){
+        deprecatedMessage <- div(
+          tags$em(
+            tags$span("Note: Deprecated variables are shown in red. See", 
+                      tags$a(tags$u("iedeades.org"), href="http://iedeades.org", 
+                             target="_blank", style= "color: #dd4b39"),
+                      "for details.", style= "color: #dd4b39")
+          )
         )
-      )
+      } else {
+        deprecatedMessage <- div(
+          tags$em(
+            tags$span("Note: Deprecated variables are shown in red.", style= "color: #dd4b39")
+          )
+        )
+      }
   } else deprecatedMessage <- NULL
   
   if (!is_empty(uploadList()$emptyFiles)){
@@ -460,7 +487,9 @@ output$uploadSummary <- renderUI({
   
   if (!is.null(tablesAndVariables$blankTables)){
     blankTableMessage <- tagList(
-      tags$p(" The following file(s) had IeDEA DES table names and headers but 0 valid records:"),
+      tags$p(" The following file(s) had ",
+      networkName,
+      " table names and headers but 0 valid records:"),
       makeBulletedList(tablesAndVariables$blankTables)
     )
   } else blankTableMessage <- NULL
@@ -471,7 +500,9 @@ output$uploadSummary <- renderUI({
     extraFileMessage <- tagList(
       tags$p(" ",
              makeItPluralOrNot("File", length(uploadList()$ExtraFiles)),
-             "in other format or not conforming to the IeDEA DES (excluded from data quality checks):",
+             "in other format or not conforming to the ",
+             networkName,
+             "data model (excluded from data quality checks):",
              paste(uploadList()$ExtraFiles, collapse = ", "))
       
       # renderTable({
@@ -494,7 +525,10 @@ output$uploadSummary <- renderUI({
       box(
         id = "uploadSummary",
         width = 10,
-        title = actionLink("uploadSummaryID", span("Summary of Uploaded IeDEA Tables", style = "color: white")),
+        title = actionLink("uploadSummaryID", 
+                           span("Summary of Uploaded ",
+                           networkName,
+                           " Tables", style = "color: white")),
         solidHeader = TRUE,
         status = "primary",
         collapsible = TRUE,
@@ -514,7 +548,34 @@ output$uploadSummary <- renderUI({
 # UI to prompt user to select files to check and submit
 output$selectFiles <- renderUI({
   if (is.null(hubInfo$fromHub)) return(NULL)
-
+  
+  if (projectDef$datamodel_url_y == 1){
+    datamodelText <- tags$a(
+      networkName, 
+      projectDef$datamodel_name, 
+      href=projectDef$datamodel_url, target="_blank"
+      )
+  } else {
+    datamodelText <- paste0(
+      networkName, " ",
+      projectDef$datamodel_name
+    )
+  }
+  
+  if (networkName == "IeDEA"){
+    sampleDataDesc <- tags$p(
+      "The sample dataset contains 48 intentionally error-filled records representing the following IeDEA DES tables:",
+      tagList(
+        lapply(c("tblBAS", "tblLTFU", "tblVIS", "tblART", "tblLAB", "tblLAB_BP"), function(x){
+          tableLabelClass <- paste0("label des-",tableDef[[x]]$table_category)
+          span(x, class = tableLabelClass)
+        })
+      )
+    )
+  } else {
+    sampleDataDesc <- paste0("The sample dataset contains intentionally error-filled records ", 
+                             "for use in demonstrating the Harmonist Data Toolkit")
+  }
   uploadFileUI <- 
     tagList(
       fluidRow(
@@ -524,9 +585,10 @@ output$selectFiles <- renderUI({
             title = "Select Data Files", 
             tagList(
               tags$p("Upload data in the ",
-                     a("IeDEA Data Exchange Standard (IeDEA DES)", 
-                       href="http://iedeades.org", target="_blank"),
-                     " format. tblBAS is required."),
+                     datamodelText,
+                     " format. ",
+                     indexTableName,
+                     " is required."),
               tags$p("Allowed file formats include ", 
                      strong("CSV, SAS, Stata, SPSS, or a ZIP containing multiple files"), " of this type."),
               tags$p(tags$em("Select a single ZIP file or multiple files with Ctrl+Click"), align = "center"),
@@ -538,13 +600,7 @@ output$selectFiles <- renderUI({
         box(width = 5,
             title = "Use Sample Dataset",
             tags$p("Launch the Toolkit with a sample dataset (fake data) for practice, testing, and demonstrations."),
-            tags$p("The sample dataset contains 48 intentionally error-filled records representing the following IeDEA DES tables:",
-                   tagList(
-                     lapply(c("tblBAS", "tblLTFU", "tblVIS", "tblART", "tblLAB", "tblLAB_BP"), function(x){
-                       tableLabelClass <- paste0("label des-",tableDef[[x]]$table_category)
-                       span(x, class = tableLabelClass)
-                     })
-                   )),
+            sampleDataDesc,
             tags$br(),
             actionButton("runWithSample", "Launch with Sample Data")
         )
@@ -563,7 +619,9 @@ output$selectFiles <- renderUI({
     if (!hubInfo$fromHub){
       requiredVariableMessage <- 
         tags$p("Your dataset contains", 
-               span("all required DES variables", class = "text-green", style = "font-weight: bold"))
+               span("all required",
+               projectDef$datamodel_abbrev,
+               " variables", class = "text-green", style = "font-weight: bold"))
     } else requiredVariableMessage <- NULL # required variables are also requested variables
     requestedVariablesMessage <- requestedVariables()
     unrecognizedFileAndVariableMessage <- unrecognizedVariables()
