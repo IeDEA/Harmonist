@@ -383,7 +383,7 @@ withinTableDateOrder <- function(errorFrame, resources){
   dateOrderPairs <- rbindlist(dateOrderPairs, use.names = TRUE)
   # if dateOrders json had other withintable date order pairs, include here
   if (!is_empty(dateOrders)){
-    dateOrders <- rbindlist(dateOrders) %>% 
+    dateOrders <- rbindlist(dateOrders, use.names = TRUE) %>% 
       filter(tableName %in% resources$tablesAndVariables$tablesToCheck)
     if (!is_empty(dateOrders)){
       dateOrderPairs <- rbindlist(list(dateOrderPairs, dateOrders), use.names = TRUE)

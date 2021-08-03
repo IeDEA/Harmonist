@@ -642,16 +642,21 @@ PatientIDChecks <- function(errorFrame, resources){
     badRecords <- !(currentTable[,patientVar] %in% validPatients)
     if (any(badRecords[!is.na(badRecords)])){
       # missing patientVar id is detected by a different check so ignore blank or NA
-      badRecordTable <- currentTable[which(badRecords),] %>% filter(!is_blank_or_NA_elements(!!patientVarSym))
+      badRecordTable <- currentTable[which(badRecords),] %>% 
+        filter(!is_blank_or_NA_elements(!!patientVarSym))
       # now check to see if any remaining records with invalid patient id
-      if (nrow(badRecordTable) == 0) return(errorFrame)
+      if (nrow(badRecordTable) == 0) next
       errorFrame <- addToErrorFrame(resources$formattedTables[[indexTableName]],
                                     resources$finalGroupChoice, errorFrame, 
                                     badRecordTable, patientVar, tableName,
                                     paste0("Invalid ", patientVar, " ID"), 
                                     errorCode = "1.1b", 
                                     "Critical", 
-                                    paste0("No record was found for this ", patientVar, " in ", indexTableName, ". Every ", patientVar, " should have an entry in ", indexTableName, "."))
+                                    paste0("No record was found for this ", 
+                                           patientVar, " in ", indexTableName, 
+                                           ". Every ", patientVar, 
+                                           " should have an entry in ", 
+                                           indexTableName, "."))
     }
   }
   return(errorFrame)

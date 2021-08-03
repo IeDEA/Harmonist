@@ -117,10 +117,6 @@ LABEL_FOR_NOT_LINKED <- "Not Linked*"
 tableDef <- rjson::fromJSON(file = "Harmonist0A.json")
 codes <- rjson::fromJSON(file = "Harmonist0B.json")
 
-# rearrange tableNames according to table_order in REDCap
-tableOrder <- sort(sapply(tableDef, function(x){return(as.numeric(x$table_order))}))
-tableDef <- tableDef[names(tableOrder)]
-
 # IeDEA-specific: link variables to DES website -------------------------
 # addREDCapIndices -----------------------------------------------------
 # Function to add numbers to each table and variable definition that link to 
@@ -135,6 +131,12 @@ addREDCapIndices <- function(tableList){
   return(tableList)
 }
 tableDef <- addREDCapIndices(tableDef)
+
+
+# rearrange tableNames according to table_order in REDCap
+tableOrder <- sort(sapply(tableDef, function(x){return(as.numeric(x$table_order))}))
+tableDef <- tableDef[names(tableOrder)]
+
 
 # create list of identifying variables in each table
 # key identifying fields should be flagged as required and key in REDCap

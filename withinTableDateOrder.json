@@ -1,10 +1,10 @@
 {
-  "tblART": {
+  "1": {
     "tableName": "tblCENTER",
     "firstDate": "OPEN_D",
     "secondDate": "CLOSE_D"
   },
-  "tblDIS": {
+  "2": {
     "tableName": "tblDIS",
     "firstDate": "DIS_D",
     "secondDate": "DIS_ED"

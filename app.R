@@ -91,7 +91,7 @@ shinyUI <- dashboardPage(
                    uiOutput("warnOnQuit"),
                    tags$div(
                      id = "versionInfo",
-                     tags$p("Harmonist Data Toolkit Version 2.0"),
+                     tags$p("Harmonist Data Toolkit Version 3.0"),
                      tags$p(tags$a("Contact us", href="mailto:harmonist@vumc.org", target="_blank"))
                    )
   ),

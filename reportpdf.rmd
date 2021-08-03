@@ -5,6 +5,7 @@ header-includes:
   - \usepackage{array}
   - \usepackage{multirow}
   - \usepackage{colortbl}
+  - \usepackage{xcolor}
 output: 
   pdf_document:
     keep_tex: TRUE
@@ -262,21 +263,30 @@ if (params$includeDataSummary){
 ```{r calcHistHeight, echo = FALSE, message=FALSE, warning= FALSE, results='asis'}
 if (params$includeHistograms){
   cat("## Histograms of important dates by ", groupVar, "   ")
-  numberOfGraphs <- length(levels(params$plotList[[1]]$data$DateName))
+  # check first to see if all plots were empty, indicated by text message
+  if (is.character(params$plotList)){
+    histHeight <- 1
+  } else {
+    numberOfGraphs <- length(levels(params$plotList[[1]]$data$DateName))
   if (numberOfGraphs == 1){
     histHeight <- 2.44
   }
   else if (numberOfGraphs == 6){
     histHeight <- 4.35
   } else histHeight <- numberOfGraphs*0.57 + 1.425
+  }
+  
 } else histHeight <- 1 #dummy value since histograms not included
 ```
 
 ```{r PlotDates, echo=FALSE, fig.height=histHeight, fig.width=6, message=FALSE, warning=FALSE, fig.cap="Histograms of important dates", results='asis'}
 if (params$includeHistograms){
-  
-  for (groupName in names(params$plotList)){
-    print(params$plotList[[groupName]])
+  if (!is.character(params$plotList)){
+    for (groupName in names(params$plotList)){
+      print(params$plotList[[groupName]])
+    }
+  } else {
+    cat(params$plotList, "\n")
   }
 }
 ```

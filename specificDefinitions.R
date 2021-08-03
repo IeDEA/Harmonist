@@ -11,7 +11,7 @@ dateIndicatingUnknown <- c("1911-11-11")
 datesThatCanBeBefore1980 <- c("MOTHERDEATH_D", "FATHERDEATH_D", "DIS_D")
 minimumExpectedDate <- as.Date("1980-01-01")
 minimumExpectedBirthDate <- as.Date("1920-01-01")
-maxHeightDecreaseInM <- 0.75
+maxHeightDecreaseInM <- 0.25 # if height decreases by this amount over time, error
 
 # no reason to flag duplicate blood pressure or cd4 measurements as error;
 # multiple measurements in one day is plausible
@@ -22,8 +22,8 @@ duplicateRecordExceptions <- c("tblLAB_BP", "tblLAB_CD4")
 approvedExtraVariables <- c("PROGRAM", "CENTER", "REGION")
 
 # the following explicit definitions should be moved to a json or REDCap
-desiredPlots <- c("ENROL_DAT", "VISIT_DAT", "TREAT_STDAT" )
-desiredTables <- c("tblINDEX", "tblVISIT", "tblTREAT")
+desiredPlots <- c("ENROL_D", "VIS_D", "ART_SD", "CD4_D","RNA_D","DIS_D" )
+desiredTables <- c("tblBAS", "tblVIS", "tblART", "tblLAB_CD4", "tblLAB_RNA", "tblDIS")
 # IeDEA-specific, used to skip fields in check for codes that are missing or unknown -
 # should this rely instead on for dq checkbox in 0A?
 codesThatCanBeBlank <- c("ART_RS", "ART_RS2", "ART_RS3", "ART_RS4", "PREG_Y", "DEATH_Y","DROP_Y", "MOTHERDEATH_Y","FATHERDEATH_Y","RNA_T")
@@ -55,7 +55,6 @@ datePairChecks <- lapply(datePairChecks, function(x){
 })
 
 # IeDEA-specific dq checks
-labIDLimits <- rjson::fromJSON(file = "labIDLimitsWithUnits.json")
 BPLabLimits <- rjson::fromJSON(file = "BPLabLimits.json")
 CD4 <- list(upperLimit= 7500, lowerLimit = 0) # when units == cells/mm3
 

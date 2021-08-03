@@ -4,6 +4,7 @@ header-includes:
   - \usepackage{longtable}
   - \usepackage{array}
   - \usepackage{multirow}
+  - \usepackage{xcolor}
 output: 
   pdf_document:
     fig_width: 6
@@ -83,6 +84,7 @@ if (params$includeDataSummary){
   if (!is.null(params$datasetQuality$appearancePlot)){
     if (is.character(params$datasetQuality$appearancePlot)){
       cat(params$datasetQuality$appearancePlot)
+      cat("\n")
     } else {
       print(params$datasetQuality$appearancePlot)
     }

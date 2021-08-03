@@ -191,37 +191,54 @@ createVisitStats <- function(tableData, reportFormat){
 
 
 hiddenDatesMessage <- function(dates, lowerDate, upperDate){
-  numBefore <- sum( (dates < lowerDate) & 
-                      (dates != dateIndicatingUnknown) & 
-                      !is.na(dates) )
-  hiddenBefore <- numBefore > 0 
+  # eliminate missing date values and dates used to indicate unknown date values
+  dates <- dates[!is.na(dates)]
+  dates <- dates[dates != as.Date(dateIndicatingUnknown)]
   
-  numAfter <- sum( (dates > upperDate) & 
-                     !is.na(dates) )
-  hiddenAfter <- numAfter > 0 
+  # how many non-missing valid dates?
+  numDates <- length(dates)
   
+  emptyFlag <- FALSE
+  additionalMessage <- NULL
   
+  if (numDates == 0){
+    emptyFlag <- TRUE
+  }
   
-  if (hiddenAfter || hiddenBefore){
-    observeBefore <- ifelse(numBefore == 1, "observation", "observations")
-    observeAfter <- ifelse(numAfter == 1, "observation", "observations")
-    if (hiddenAfter && hiddenBefore) connector <- " and "
-    else connector <- NULL
-    additionalMessage <- " (Note: "
-    if (hiddenBefore) beforeMessage <- paste(numBefore, observeBefore, "before year", year(lowerDate))
-    else beforeMessage <- NULL
-    if (hiddenAfter) afterMessage <- paste(numAfter, observeAfter, "after year", year(upperDate))
-    else afterMessage <- NULL
-    verb <- ifelse(sum(numBefore + numAfter) < 2, " is", " are")
-    additionalMessage <- paste0(additionalMessage,
-                                beforeMessage,
-                                connector,
-                                afterMessage,
-                                verb,
-                                " hidden)")
+  else if (numDates > 0){
+    # how many dates are outside observation range?
+    numBefore <- sum(dates < lowerDate)
+    hiddenBefore <- numBefore > 0 
     
-  } else additionalMessage <-  NULL
-  return(additionalMessage)
+    numAfter <- sum(dates > upperDate)
+    hiddenAfter <- numAfter > 0 
+    
+    if (numAfter + numBefore == numDates){
+      emptyFlag <- TRUE
+    }
+    
+    if (hiddenAfter || hiddenBefore){
+      observeBefore <- ifelse(numBefore == 1, "observation", "observations")
+      observeAfter <- ifelse(numAfter == 1, "observation", "observations")
+      if (hiddenAfter && hiddenBefore) connector <- " and "
+      else connector <- NULL
+      additionalMessage <- " (Note: "
+      if (hiddenBefore) beforeMessage <- paste(numBefore, observeBefore, "before year", year(lowerDate))
+      else beforeMessage <- NULL
+      if (hiddenAfter) afterMessage <- paste(numAfter, observeAfter, "after year", year(upperDate))
+      else afterMessage <- NULL
+      verb <- ifelse(sum(numBefore + numAfter) < 2, " is", " are")
+      additionalMessage <- paste0(additionalMessage,
+                                  beforeMessage,
+                                  connector,
+                                  afterMessage,
+                                  verb,
+                                  " hidden)")
+      
+    }
+  }
+  return(list(message = additionalMessage,
+              emptyFlag = emptyFlag))
 }
 
 createPlotTitle <- function(groupName, detailedMessage){
@@ -261,27 +278,46 @@ generateHistogramGrid <- function(tableData, groupName, dateFields){
       dateDataset <- bind_rows(dateDataset, datesInTable)
     }
   }
+  
+  # if no data to include, don't create a histogram
+  if (is.null(dateDataset)) return(NULL)
+  if (all(is.na(dateDataset$Dates))) return(NULL)
+  
   # ensure that histograms will be in desired order, as specified in dateFields
   dateDataset$DateName = factor(dateDataset$DateName, levels=dateFields)
-  if (!is.null(dateDataset) && any(!is.na(dateDataset$Dates))){
-    dateRange <- "defaultRange"
-    if (!is.null(input$histoRange)){
-      dateRange <- input$histoRange
-    }
-    if (dateRange == "chooseRange"){
-      minYear <- input$yearsToPlot[[1]]
-      maxYear <- input$yearsToPlot[[2]]
-    }
-    else {
-      minYear <- 2000
-      maxYear <- as.numeric(format(Sys.Date(), "%Y"))
-    }
-    xmax <- as.Date(paste0(maxYear,"-12-31"))
-    xmin <- as.Date(paste0(minYear, "-01-01"))
-    
-    message <- hiddenDatesMessage(dateDataset$Dates, xmin, xmax)
-    plotTitle <- createPlotTitle(groupName, message)
-    
+  
+  dateRange <- "defaultRange"
+  if (!is.null(input$histoRange)){
+    dateRange <- input$histoRange
+  }
+  if (dateRange == "chooseRange"){
+    minYear <- input$yearsToPlot[[1]]
+    maxYear <- input$yearsToPlot[[2]]
+  }
+  else {
+    minYear <- 2000
+    maxYear <- as.numeric(format(Sys.Date(), "%Y"))
+  }
+  xmax <- as.Date(paste0(maxYear,"-12-31"))
+  xmin <- as.Date(paste0(minYear, "-01-01"))
+  
+  # message will be a list with a message to include in the plot title
+  # about observations outside the chosen date window and also
+  # a logical flag to indicate if zero observations are inside the date window
+  message <- hiddenDatesMessage(dateDataset$Dates, xmin, xmax)
+  plotTitle <- createPlotTitle(groupName, message$message)
+  
+  if (message$emptyFlag){
+    p <- ggplot() + 
+      theme_void() + 
+      geom_text(
+        aes(0,0,
+            label = paste0("There were zero non-missing date observations between ",
+                           xmin,
+                           " and ",
+                           xmax))) +
+      labs(title = plotTitle$title)
+  } else {
     p <- ggplot(dateDataset, aes(Dates, label = Dates)) + 
       geom_histogram(boundary = xmin,
                      binwidth = 91.25,
@@ -307,14 +343,11 @@ generateHistogramGrid <- function(tableData, groupName, dateFields){
       ) + 
       xlab("") +
       ylab("Number of observations") +
-    #  labs(title = plotTitle)
+      #  labs(title = plotTitle)
       labs(title = plotTitle$title,
            subtitle = plotTitle$subtitle)
-    gp <- p 
   }
-  else gp <- NULL
-  
-  return(gp)
+  return(p)
 }
 
 
@@ -337,7 +370,14 @@ generateHistogramsAllPrograms <- reactive({
                         y=groupName, z = groupVar)
     plotList[[groupName]] <- generateHistogramGrid(tableData, groupName, datesToInclude)
     print(paste0("plotlist", groupName))
-    
+  }
+  # check to see if every plot is empty and if so replace with single statement
+  emptyPlots <- unlist(lapply(groups, function(x){is_empty(plotList[[x]]$data)}))
+  if (all(emptyPlots)){
+    plotList <- paste0(
+      "There were zero non-missing date observations between ",
+      input$yearsToPlot[[1]], " and ", input$yearsToPlot[[2]]
+    )
   }
   return(plotList)
 })
