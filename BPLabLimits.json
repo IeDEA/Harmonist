@@ -1,0 +1,17 @@
+{
+     "mmHg":{
+       "upper": 300,
+       "lower": 50,
+       "unitCode": 1
+     },
+     "cmHg":{
+       "upper": 30,
+       "lower": 5,
+       "unitCode": 2
+     },
+     "kPa":{
+       "upper": 34.7,
+       "lower": 6.7,
+       "unitCode": 3
+     }
+   }
