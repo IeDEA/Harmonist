@@ -1,0 +1,150 @@
+---
+header-includes:
+  - \usepackage{booktabs}
+  - \usepackage{longtable}
+  - \usepackage{array}
+  - \usepackage{multirow}
+  - \renewcommand{\contentsname}{IeDEA Harmonist Quality Metrics Report}
+params:
+  requestedTables: "requestedTables"
+  region: "region"
+  userDetails: "userDetails"
+  groupVar: "groupVar"
+  dqHeatmaps: "dqHeatmaps"
+  codedDqHeatmaps: "codedDqHeatmaps"
+  tocFlag: "tocFlag"
+  reportDesc: "reportDesc"
+output: 
+  pdf_document:
+    fig_width: 6
+    fig_height: 9
+    fig_caption: yes
+    toc: true
+geometry: margin=1.5cm
+toccolor: blue
+urlcolor: blue
+linkcolor: blue
+---
+
+
+```{r datasetLabel, echo = FALSE,  message=FALSE, warning=FALSE, results='asis'}
+
+userDetails <- params$userDetails
+region <- params$region 
+
+if (userDetails$uploadconcept_mr == "MR000"){
+  headerMessage <- "Report created"
+} else headerMessage <- paste0("This report summarizes the dataset submitted for Concept ", userDetails$uploadconcept_mr)
+
+if (userDetails$uploaduser_id == ""){
+  regionMessage <- NULL
+} else regionMessage <- paste0("from IeDEA Region ", params$region)
+
+```
+
+## Report Description
+
+### `r params$reportDesc`  
+
+`r headerMessage` `r regionMessage` on `r Sys.Date()`
+
+The **Harmonist Quality Metrics Report** provides a visual summary in the form of color-coded heat map(s) of several data quality metrics for each variable in a dataset. The numbers in each cell of the heat map range from 0-100 to indicate the percentage of records satisfying each of three quality metrics for the current variable:
+
+1. **Compliant** *What percentage of the records in this table have entries of this variable that are compliant with the IeDEA Data Exchange Standard (DES)?* DES compliance requires valid codes for coded variables, valid formats for dates and numeric variables, unique records (no duplicates), valid patient ID's in each table. Variables flagged as "Required" in the IeDEA DES should not be blank. 
+
+2. **Logical** *What percentage of the completed (non-blank, non-missing) entries for this variable are logically consistent with other data in the dataset?* For example, all patients should have an enrollment date after their birthdate.
+
+3. **Complete** *What percentage of the entries of this variable in the table are non-blank, non-missing?* In some cases, a subset of the table is used to calculate Completeness. Some variables should only be complete in records for which a second variable satisfies a condition. For example, DEATH_D should only be complete in records for which DEATH_Y is 1 (Yes), so Completeness for DEATH_D is calculated only using the records with DEATH_Y equal to 1. Similarly, ART_RS (reason for ending treatment) should only be complete for records with non-blank entry for ART_ED (date treatment ended).
+
+In the **Compliant** and **Logical** columns, heat map colors range from Green (100%) to Red (0%) to quickly highlight items of concern.    
+In the **Complete** column, heat map colors range from Dark Blue (100%) to Light Blue (0%), more appropriate because incomplete values are not necessarily a concern. For example, ART_ED (end date) will be blank if a patient has not ended treatment.  
+
+N/A indicates that there were no records available to calculate that metric. A red "0" in the Compliant or Logic column indicates that all records had errors in that category for that variable.
+
+**Note:** This is a draft version of a new Harmonist report and its content is under development. Please email [Judy Lewis](mailto:judy.lewis@vumc.org) with feedback.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = FALSE,
+	message = FALSE,
+	warning = FALSE
+)
+```
+
+
+```{r plotHeatMaps, echo=FALSE, fig.height=9.5, fig.width=7, message=FALSE, warning=FALSE, results='asis'}
+for (tableName in names(params$dqHeatmaps)){
+  cat("## Table ", tableName, "   ", "\n")
+  print(params$dqHeatmaps[[tableName]])
+
+  cat("\n\n")
+ #  cat("\n\n\\pagebreak\n")
+}
+```
+
+```{r codedHeatMapDim, echo = FALSE, message=FALSE, warning=FALSE, results='asis'}
+if (!is.null(params$codedDqHeatmaps)){
+  details <- params$codedDqHeatmaps$data
+  # coded variables exist, if Not Linked is one of the group levels, include explanatory text
+#  if ("Not Linked" %in% levels(details[[1]])){
+#    notLinkedText <- 'Note: "Not Linked" indicates records that are not linked to patients or patient groups.'
+#  } else {
+    notLinkedText <- ''
+#  }
+  
+  # coded variables exist, determine dimensions of heatmap
+
+  
+  x <- nlevels(details[[1]])
+  y <- nlevels(details[[2]])
+  
+  if (x < 5){
+    codedwidth <- 5
+  } else if (x < 21){
+    codedwidth <- x*0.4 + 1
+  } else {
+    codedwidth <- 7
+  }
+  
+  # with the current margins and introductory text, the maximum figure height is 8.5 inches
+  # the following formula attempts to keep cell size constant
+  if (y < 18){
+    codedheight <- y*0.4 + 1.1
+  } else {
+    codedheight <- 8.5
+  }
+} else {
+  #set up dummy values for height and width
+  codedheight <- 2
+  codedwidth <- 2
+}
+if (codedheight > 7){
+  codedheight <- 8.6
+}
+
+```
+
+\pagebreak
+
+```{r codedVars, echo = FALSE, message=FALSE, warning=FALSE, results='asis'}
+if (!is.null(params$codedDqHeatmaps)){
+  cat("## Coded Variables: Useful Information", "  ", "\n")
+   cat('This additional table is provided for investigators interested in not just the completeness of datasets but also the amount
+of *useful information*. Since the code lists for many variables include a code for "Unknown", a variable might appear to be
+100% complete but contain the code for "Unknown" in most records. For every coded variable in the dataset,
+the heat map below summarizes the percent of records that are not blank, not invalid codes, and not coded "Unknown".',
+notLinkedText,
+"  ", 
+"\n")
+   }
+```
+
+
+
+```{r codedHeatMap, echo=FALSE, fig.height=codedheight, fig.width=codedwidth, message=FALSE, warning=FALSE, results='asis'}
+if (!is.null(params$codedDqHeatmaps)){
+    print(params$codedDqHeatmaps)
+}
+
+```
+
