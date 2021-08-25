@@ -124,6 +124,8 @@ if (params$includeHistograms){
 ```
 
 
+\newpage
+
 ```{r kable, echo=FALSE, fig.height=5, fig.width=7.5, results='asis'}
 if (params$includeErrorSummary){
   cat("## Data Quality Summary for ", groupVar, Hmisc::latexTranslate(program),"  ")

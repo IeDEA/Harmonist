@@ -3,14 +3,14 @@ dateErrorType <- list(
   "format" = "Invalid date format",
   "future" = "Future date",
   "earlyDate" = paste0("Date before ", year(minimumExpectedDate)),
-  "earlyBIRTH_D" = paste0("BIRTH_D before ", year(minimumExpectedBirthDate)),
+  "earlyBIRTH_D" = paste0(birthDateVar, " before ", year(minimumExpectedBirthDate)),
   "_D_A" = "Conflict between date and date approximation"
 )
 dateErrorDesc <- list(
   "format" = "Date format must be YYYY-MM-DD.",
   "future" = "This date is in the future.",
-  "earlyDate" = paste0("Dates (other than BIRTH_D) are expected to be after ", year(minimumExpectedDate), "."),
-  "earlyBIRTH_D" = paste0("Patient BIRTH_D is expected to be after ", year(minimumExpectedBirthDate), "."),
+  "earlyDate" = paste0("Dates (other than ", birthDateVar, ") are expected to be after ", year(minimumExpectedDate), "."),
+  "earlyBIRTH_D" = paste0("Patient ", birthDateVar, " is expected to be after ", year(minimumExpectedBirthDate), "."),
   "_D_A" = paste0("A date was provided but the date approximation was coded as Unknown, which is conflicting information. If a date approximation is coded as Unknown, the date entry should be blank or ", dateIndicatingUnknown, ".")
 )
 dateErrorCode <- list(
@@ -94,7 +94,7 @@ findFutureDates <- function(resources, groupVar, errorFrame, table, formattedTab
 findDatesOutOfRange <- function(resources, groupVar, errorFrame, table, formattedTable, dateFieldName, tableName){
       # now check for dates that seem earlier than expected range, first BIRTH_D then other dates
       # 
-  if (dateFieldName == "BIRTH_D"){
+  if (dateFieldName == birthDateVar){
     minDate <- minimumExpectedBirthDate
     errorType <- "earlyBIRTH_D"
     earlyDates <- (formattedTable[[dateFieldName]] < minDate) & (formattedTable[[dateFieldName]] != dateIndicatingUnknown)

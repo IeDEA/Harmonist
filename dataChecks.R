@@ -92,7 +92,6 @@ addToErrorFrame <- function(indexTable, groupVar, errorFrame, table, field, tabl
   for (i in 1:length(idList)){
     idColumns <- c(idColumns, idFieldNames[[i]], idValueNames[[i]]) # idFieldNames, idValueNames in definitions.R
   }
-  
   groupColumns <- ifelse(groupVar == defGroupVar, defGroupVar, c(defGroupVar, groupVar))
   
   columnNames <- c(groupColumns, "table", idColumns, minimumErrorDetail, names(list(...))) #minimumErrorDetail in definitions.R
@@ -107,7 +106,6 @@ addToErrorFrame <- function(indexTable, groupVar, errorFrame, table, field, tabl
       summaryOfErrors <- table[, c(idList[[1]], groupColumnsInTable)]
     }
     print("making sure program included")
-    
     if (!groupVar %in% names(summaryOfErrors)){
       summaryOfErrors[[groupVar]] <- findIt(summaryOfErrors, groupVar, indexTable = indexTable)
     }
@@ -222,6 +220,7 @@ checkCodedVariables <- function(errorFrame, resources){
       # if codes are not in sequential order, need character for codelist reference
       codeList <- codes[[as.character(codeIndex)]]
       validCodes <- names(codeList)
+
       # all invalid codes should be indicated as invalid code in formattedTable
       badCodeIndices <- formattedTable[[codedField]] == "Invalid Code"
       if (any(badCodeIndices, na.rm = TRUE)){
@@ -391,6 +390,8 @@ findMissingRequiredValues <- function(errorFrame, resources){
     requiredVariables <- findVariablesMatchingCondition(tableName, tableDef, "variable_required", "1")
     
     for (fieldName in requiredVariables){
+      if (fieldName %in% requiredAtBaseline) next # in specific definitions, only required at baseline SRN
+
       print(paste0("checking missing ", fieldName, Sys.time()))
       
       # if this is a coded variable, missing entries are labeled "Missing", otherwise, check for blank or NA

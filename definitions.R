@@ -116,6 +116,7 @@ LABEL_FOR_NOT_LINKED <- "Not Linked*"
 # data model definition -----------------------------------------------------------
 tableDef <- rjson::fromJSON(file = "Harmonist0A.json")
 codes <- rjson::fromJSON(file = "Harmonist0B.json")
+maxExtraVar <- 10 # number of non-data model column names to list in Toolkit UI
 
 # IeDEA-specific: link variables to DES website -------------------------
 # addREDCapIndices -----------------------------------------------------
@@ -177,6 +178,7 @@ allRequiredVariables <- unique(
 
 
 # report definitions ---------------------------------------------------------------
+minYearForHistograms <- 2000 # lower limit of dates to display 
 # for plots
 xAxisLabelAngle <- 45
 

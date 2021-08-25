@@ -302,7 +302,7 @@ summarizeDQMetrics <- function(errorFrame, tableRowsByGroup, formattedTables, gr
       ### Analyze this logic
 
       if ( ("Missing" %in% groupTable[[groupVar]]) && 
-           (groupTable[which(groupTable[[groupVar]] == "Missing"), numRows] == 0) ){
+           (groupTable[which(groupTable[[groupVar]] == "Missing"), "numRows"] == 0) ){
         #only include Missing if necessary
         groupTable <- groupTable %>% filter(!! rlang::sym(groupVar) != "Missing" )
       }

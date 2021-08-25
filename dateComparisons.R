@@ -270,7 +270,8 @@ globalDateChecksAfter <- function(errorFrame, resources){
 
 
 # generalDateOrder -------------------------------------------------------------------------     
-generalDateOrder <- function(resources, groupVar, errorFrame, firstDate, secondDate, firstTableName, secondTableName, jointTable){
+generalDateOrder <- function(resources, groupVar, errorFrame, firstDate, secondDate, firstTableName, 
+                             secondTableName, jointTable){
   #-------Now add fake _A if one or the other doesn't have _A
   # judy change variable not included to NA
   first_A_flag <- TRUE
@@ -365,6 +366,7 @@ withinTableDateOrder <- function(errorFrame, resources){
   dateOrderPairs <- list()
   dataset <- resources$formattedTables
   currentTables <- names(dataset)
+  # create a list of date order pairs in each table
   for (tableName in currentTables){
     tableData <- dataset[[tableName]]
     varsInTable <- names(tableData)
@@ -374,21 +376,33 @@ withinTableDateOrder <- function(errorFrame, resources){
     baseDateName <- str_sub(endDateName[[1]], end = -(1 + nchar(edExt)))
     startDateName <- paste0(baseDateName, sdExt)
     if (!startDateName %in% varsInTable) next
+    # we have found a date order pair. Add to list.
     dateOrderPairs[[paste(tableName, baseDateName, sep = "_")]] <- 
       tibble(tableName = tableName,
              firstDate = startDateName,
              secondDate = endDateName)
   }
-  if (is_empty(dateOrderPairs)) return(errorFrame)
-  dateOrderPairs <- rbindlist(dateOrderPairs, use.names = TRUE)
+  
+  
+  if (!is_empty(dateOrderPairs)){
+    dateOrderPairs <- rbindlist(dateOrderPairs, use.names = TRUE)
+  }
+  
   # if dateOrders json had other withintable date order pairs, include here
   if (!is_empty(dateOrders)){
-    dateOrders <- rbindlist(dateOrders, use.names = TRUE) %>% 
+    dateOrdersInData <- rbindlist(dateOrders, use.names = TRUE) %>% 
       filter(tableName %in% resources$tablesAndVariables$tablesToCheck)
-    if (!is_empty(dateOrders)){
-      dateOrderPairs <- rbindlist(list(dateOrderPairs, dateOrders), use.names = TRUE)
+    if (nrow(dateOrdersInData) == 0){
+      dateOrdersInData <- NULL
     }
   }
+
+  if (is_empty(dateOrderPairs) && is_empty(dateOrdersInData)){
+    return(errorFrame)
+  } else if (!is_empty(dateOrdersInData)){
+    dateOrderPairs <- rbindlist(list(dateOrderPairs, dateOrdersInData), use.names = TRUE)
+  }
+  
   # make sure no duplicate date order checks
   dateOrderPairs <- unique(dateOrderPairs) 
   if (is_empty(dateOrderPairs)) return(errorFrame)

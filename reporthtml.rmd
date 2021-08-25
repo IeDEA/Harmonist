@@ -84,24 +84,36 @@ sumTables <- params$datasetSummary$tableSummaryKable
 groups <- sort(unique(tableData[[indexTableName]][[groupVar]]))
 groups <- groups[groups != "Missing"]
 # use groups variable in later chunks
-numberInGroup <- map_dbl(groups, 
-                         ~nrow(unique(select(
-                           filter(tableData[[indexTableName]], 
-                                  (!! rlang::sym(groupVar)) == .), 
-                           params$patientVarSym))))
-
-groupSummary <- data.frame("GroupName" = groups, "Patients" = numberInGroup)
-names(groupSummary)[[1]] <- groupVar
-
-sumGroups <- kbl(groupSummary, col.names = c(groupVar,"Patients"), caption = paste0(groupVar, " in Dataset"),longtable = T, format = "html") %>% kable_styling(full_width = FALSE, position = "left", "bordered")
+# if no valid groups in dataset, don't include summary of groups
+if (is_empty(groups)){
+  sumGroups <- NULL
+  numberInGroup <- NULL
+} else {
+  numberInGroup <- map_dbl(groups, 
+                           ~nrow(unique(select(
+                             filter(tableData[[indexTableName]], 
+                                    (!! rlang::sym(groupVar)) == .), 
+                             params$patientVarSym))))
+  
+  groupSummary <- data.frame("GroupName" = groups, "Patients" = numberInGroup)
+  names(groupSummary)[[1]] <- groupVar
+  
+  sumGroups <- kbl(groupSummary, col.names = c(groupVar,"Patients"), 
+                   caption = paste0(groupVar, " in Dataset"),longtable = T, 
+                   format = "html") %>% 
+    kable_styling(full_width = FALSE, position = "left", "bordered")
+}
 ```
 
 ```{r attempt, echo=FALSE, message=FALSE, warning=FALSE, results='asis'}
 
 sumTables %>% kable_styling(position = "left") 
 cat("\n")
-sumGroups
-cat("\n")
+if (!is.null(sumGroups)){
+  sumGroups
+  cat("\n")
+}
+
 
 ```
 

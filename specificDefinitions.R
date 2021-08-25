@@ -4,7 +4,7 @@
 redcap_url <- "https://redcap.vanderbilt.edu/api/" # edit for other servers
 
 
-AWS_bucket_name <- "shiny-app-test" # change - should be in 0C?
+AWS_bucket_name <- "" # only for networks with hub
 
 datesInFuture <- "NEXT_VISIT_D"
 dateIndicatingUnknown <- c("1911-11-11") 
@@ -22,16 +22,19 @@ duplicateRecordExceptions <- c("tblLAB_BP", "tblLAB_CD4")
 approvedExtraVariables <- c("PROGRAM", "CENTER", "REGION")
 
 # the following explicit definitions should be moved to a json or REDCap
-desiredPlots <- c("ENROL_D", "VIS_D", "ART_SD", "CD4_D","RNA_D","DIS_D" )
-desiredTables <- c("tblBAS", "tblVIS", "tblART", "tblLAB_CD4", "tblLAB_RNA", "tblDIS")
+# for IeDEA: desiredPlots <- c("ENROL_D", "VIS_D", "ART_SD", "CD4_D","RNA_D","DIS_D" )
+# for IeDEA: desiredTables <- c("tblBAS", "tblVIS", "tblART", "tblLAB_CD4", "tblLAB_RNA", "tblDIS")
+desiredPlots <- c() # date variables to include in report histograms
+desiredTables <- c() # corresponding table name for each of those variables
+
 # IeDEA-specific, used to skip fields in check for codes that are missing or unknown -
 # should this rely instead on for dq checkbox in 0A?
-codesThatCanBeBlank <- c("ART_RS", "ART_RS2", "ART_RS3", "ART_RS4", "PREG_Y", "DEATH_Y","DROP_Y", "MOTHERDEATH_Y","FATHERDEATH_Y","RNA_T")
+codesThatCanBeBlank <- c() 
 
-trackNumberOfEntriesInVis <- c("WHO_STAGE","CDC_STAGE","HEIGH","WEIGH")
+trackNumberOfEntriesInVis <- c("HEIGHT","WEIGHT")
 
-interesting <- c("SEX","NAIVE_Y","AIDS_Y","RECART_Y", "MODE", "MED_ID", "DEATH_Y", "CD4_V","LAB_V","RNA_V") # "WEIGH","HEIGH","WHO_STAGE","CDC_STAGE",
-isFactor <- c("CENTER", "COUNTRY","PROVINCE", "DISTRICT", "CITY") #maybe take out
+interesting <- c() # list variables to include in heat map
+isFactor <- c("CENTER", "COUNTRY","PROVINCE", "DISTRICT", "CITY") 
 
 # for report
 visitStatsToReport <- c("Enrolled","Visits", "Deaths", "Transfers Out", "Viral Load","CD4")
@@ -40,9 +43,11 @@ otherStatsToReport <- c("Enrolled", "Patients with > 2 visits", "Patients deceas
                         "Median length of follow up (years)", "Median number of viral loads per patient")
 
 codesIndicatingTransfer <- c(codes$'32'$`4`, codes$'32'$`4.1`) # this is the code text, not numeric code value
-minYearForVisitStats <- year(Sys.Date()) - 8 # include 8 most recent years
+numYearsInReport <- 8 # include 8 most recent years
+minYearForVisitStats <- year(Sys.Date()) - numYearsInReport  
 
-pregnancyTables <- c("tblPREG","tblNEWBORN","tblPREG_OUT","tblNEWBORN_ABNORM","tblDELIVERY_MUM","tblDELIVERY_CHILD")
+pregnancyTables <- c() #these are tables to exclude from patient-linked dq checks
+# in IeDEA: ("tblPREG","tblNEWBORN","tblPREG_OUT","tblNEWBORN_ABNORM","tblDELIVERY_MUM","tblDELIVERY_CHILD")
 
 # date approximation logic -- IeDEA-specific
 datePairChecks <- jsonlite::read_json("dateApproximationLogic.json")

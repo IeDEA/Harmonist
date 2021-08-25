@@ -13,10 +13,14 @@ output$programsToInclude <- renderUI({
   if (is.null(uploadedTables())) return(NULL)
   groupVar <- finalGroupChoice()
   groupNames <- finalGroupLevels()
-  if (length(groupNames)==1){
-    availChoices = groupNames
-  }
-  else {
+  # if no valid groups, don't offer individual group reports
+  if (length(groupNames) == 0){
+    availChoices <- "all"
+    names(availChoices) <- "All"
+  } else if (length(groupNames) == 1){
+    # if only one group, don't offer to zip individual groups
+    availChoices <- groupNames
+  } else {
     availChoices <- list(
       "all",
       "allZip",

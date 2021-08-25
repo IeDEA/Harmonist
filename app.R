@@ -14,6 +14,7 @@
 #   Version 1: August 10, 2017
 #   Version 2 (including integration with Hub): March 2019
 #   Version 3: Generalized to other data models: May 2021
+#   Version 3.1: Added data quality checks for IeDEA Sentinal Research Network
 #   
 
 library(shiny)
@@ -91,7 +92,7 @@ shinyUI <- dashboardPage(
                    uiOutput("warnOnQuit"),
                    tags$div(
                      id = "versionInfo",
-                     tags$p("Harmonist Data Toolkit Version 3.0"),
+                     tags$p("Harmonist Data Toolkit Version 3.1"),
                      tags$p(tags$a("Contact us", href="mailto:harmonist@vumc.org", target="_blank"))
                    )
   ),
@@ -887,11 +888,10 @@ shinyServer <- function(input, output, session){
     if (!is.null(myfile)){
       myfile <- as.data.frame(myfile)
       # determine if any of the column names include non-alphabetic characters
-      # because toupper will crash 
+      # because later code will crash with strange characters
       badColumns <- which(grepl("\\W", names(myfile)))
       names(myfile)[badColumns] <- paste0(iconv(names(myfile)[badColumns], from = "", to = "ASCII",""),
                                           "_INVALID_CHARACTERS_IN_VARIABLE_NAME")
-      names(myfile) <- toupper(names(myfile))
     }
     print("End ReadOneTable")
     return(myfile)
@@ -1055,6 +1055,7 @@ shinyServer <- function(input, output, session){
   
   # checkTableForMissingColumns ---------------------------------------------
   checkTableForMissingColumns <- function(table, tableName){
+
     uploadedColumnNames <- names(table)
     requiredColumns <- findVariablesMatchingCondition(tableName, tableDef, "variable_required", "1")
     # temporarily: allow GENDER instead of SEX   JUDY
@@ -1112,6 +1113,16 @@ shinyServer <- function(input, output, session){
    
       # keep track of table with headers but no records that aren't blank or NA
       if (is_table_blank(result)) blankTables <- c(blankTables, tableName)
+
+      desCols <- names(tableDef[[tableName]]$variables)
+      tableCols <- names(result)
+      tableColNames <- tableCols
+      for (colName in tableCols){
+        if (!tolower(colName) %in% tolower(desCols)) next
+        desColName <- desCols[which(tolower(desCols) == tolower(colName))]
+        tableColNames[tableCols == colName] <- desColName
+      }
+      names(result) <- tableColNames
 
       uploaded[[tableName]] <- result
       missingInTable <- checkTableForMissingColumns(table = uploaded[[tableName]], tableName = tableName)

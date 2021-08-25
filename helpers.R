@@ -248,7 +248,16 @@ createListsOfTablesAndVariables <- function(tableList, tableDef){
   } else {
     all_non_des <- unique(unlist(non_des_variables))
     non_des_count <- length(all_non_des[!all_non_des %in% approvedExtraVariables])
-    non_des_to_display <- lapply(non_des_variables, function(x)paste0(x, collapse = ", "))
+    non_des_to_display <- lapply(non_des_variables, 
+                                 function(x){
+                                   if (length(x) < maxExtraVar){ # in definitions
+                                     paste0(x, collapse = ", ")
+                                   } else {
+                                     paste0(length(x), " additional data columns")
+                                   }
+                                 }
+    )
+    
     toDisplay <- tibble("Table" = tableBadge(names(tableList)), 
                             "Records" = numberOfRecords,
                             "networkName datamodel_abbrev Variables" = unlist(des_variables_list),

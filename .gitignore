@@ -13,7 +13,6 @@ code check thoughts.R
 createTestData.R
 dataChecksRevisingCodeCheck.R
 donut charts.R
-dqMetrics.R
 formattingTablesCodeEditing.R
 formattingTablesCodeReal.R
 heatmap.R
@@ -21,7 +20,6 @@ moreDQMetricscode.R
 new0a.R
 oldDqMetricIdeas.R
 otherVisitStats.R
-reportdqmetrics.rmd
 reportdqmetrics2.rmd
 sampleDatasetDescription.txt
 sessionReloadTest.R

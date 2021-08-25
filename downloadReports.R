@@ -295,7 +295,7 @@ generateHistogramGrid <- function(tableData, groupName, dateFields){
     maxYear <- input$yearsToPlot[[2]]
   }
   else {
-    minYear <- 2000
+    minYear <- minYearForHistograms # in definitions.R
     maxYear <- as.numeric(format(Sys.Date(), "%Y"))
   }
   xmax <- as.Date(paste0(maxYear,"-12-31"))
@@ -711,14 +711,18 @@ createReport <- function(file, reportType = c("PDF", "html"),
     # if every patient in the index table is found in the other patient-linked
   # tables, no need to show an all-green heat map, just a statement:
   appearanceSummary <- errorTable()$appearanceSummary
-  if (all(appearanceSummary$percent == 100)){
-    appearanceSummary$message <- paste0(
-      "Every patient listed in ",
-      indexTableName,
-      " has records in ",
-      knitr::combine_words(sort(unique(appearanceSummary$table))),
-      "."
-    )
+  if (nrow(appearanceSummary) == 0){
+    appearanceSummary <- NULL
+  } else {
+    if (all(appearanceSummary$percent == 100)){
+      appearanceSummary$message <- paste0(
+        "Every patient listed in ",
+        indexTableName,
+        " has records in ",
+        knitr::combine_words(sort(unique(appearanceSummary$table))),
+        "."
+      )
+    }
   }
   
   params <- list(

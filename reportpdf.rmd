@@ -89,34 +89,44 @@ sumTables <- params$datasetSummary$tableSummaryKable
 ```{r listOfPrograms, message=FALSE, warning=FALSE, include=FALSE, results='asis'}
 groups <- sort(unique(tableData[[indexTableName]][[groupVar]]))
 groups <- groups[groups != "Missing"]
-# use groups variable in later chunks
-numberInGroup <- map_dbl(groups, 
-                         ~nrow(unique(select(
-                           filter(tableData[[indexTableName]], 
-                                  (!! rlang::sym(groupVar)) == .), 
-                           params$patientVarSym)))) 
-groupSummary <- data.frame("GROUP" = groups, "Patients" = numberInGroup)
-names(groupSummary)[[1]] <- groupVar
-appearanceSummary <- params$appearanceSummary
-temp <- groupSummary
+# if no valid groups in dataset, don't include summary of groups
+if (is_empty(groups)){
+  sumProgs <- NULL
+  numberInGroup <- NULL
+} else {
+  # use groups variable in later chunks
+  numberInGroup <- map_dbl(groups, 
+                           ~nrow(unique(select(
+                             filter(tableData[[indexTableName]], 
+                                    (!! rlang::sym(groupVar)) == .), 
+                             params$patientVarSym)))) 
+  groupSummary <- data.frame("GROUP" = groups, "Patients" = numberInGroup)
+  names(groupSummary)[[1]] <- groupVar
+  appearanceSummary <- params$appearanceSummary
+  temp <- groupSummary
   for (tableName in unique(appearanceSummary$table)){
     numberInTable <- appearanceSummary %>% filter(table == tableName) %>% select((!!groupVarSE), number)
     names(numberInTable) <- c(groupVar,tableName)
     temp <- left_join(temp, numberInTable, by = groupVar)
   }
-sumProgs <- kbl(temp, 
-                format = "latex",  
-                caption = paste0("Number of Patients from Each ", 
-                                 groupVar, " in Dataset"),
-                longtable = T, booktabs = T) %>%
-  kable_styling(latex_options = c("repeat_header"))
+  sumProgs <- kbl(temp, 
+                  format = "latex",  
+                  caption = paste0("Number of Patients from Each ", 
+                                   groupVar, " in Dataset"),
+                  longtable = T, booktabs = T) %>%
+    kable_styling(latex_options = c("repeat_header"))
   #kable_styling(full_width = FALSE, position = "right", "bordered")
+}
+
 ```
 
 
 ```{r programSummary, echo=FALSE, message=FALSE, warning=FALSE, results='asis'}
 sumTables
-sumProgs
+if (!is.null(sumProgs)){
+  sumProgs
+}
+
 ```
 
 ```{r summarytable, echo=FALSE, message=FALSE, warning=FALSE, results='asis'}
@@ -293,10 +303,10 @@ if (params$includeHistograms){
 
 \newpage
 
-\pagebreak
 
 ```{r kable, echo=FALSE, message=FALSE, warning=FALSE, results='asis'}
 if (params$includeErrorSummary){
+  cat("\\newpage")
   cat("## Data Quality Summary  ")
     cat("\n")
   highLevelSummary <- params$highLevel

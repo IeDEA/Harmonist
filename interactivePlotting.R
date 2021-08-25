@@ -69,7 +69,7 @@ observeEvent(input$var1,{
       #For now remove _D_A variables from plotting
       choices2 <- choices2[!endsWith(choices2,"D_A")]
       choices2 <- choices2[choices2 != input$var1]
-      message <- "Select a categorical variable to group data by"
+      message <- "Select a categorical variable to group data"
     }
     
     selectInput("var2", message,
