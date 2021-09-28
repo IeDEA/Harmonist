@@ -553,6 +553,7 @@ summarizeMissingByGroup <- function(groupVar, errorFrame, resources, summaryFram
                                   findVariablesMatchingCondition(tableName, tableDef, "variable_missingaction", "1"))
     
     varsToCheck <- c(variablesToTrack, intersect(variablesInTable, interesting))
+    # if it's required, missing values trigger errors
     varsToCheck <- varsToCheck[!varsToCheck %in% requiredVariables]
     for (fieldName in varsToCheck){
       print(paste0("checking missing ", fieldName, Sys.time()))
@@ -895,30 +896,39 @@ initializeAppearanceSummary <- function(groupVar, programNames,tableNames){
 
 # Create a table of the number of VALID patients included in each table
 findPatients <- function(formattedTables, tablesToCheckWithPatientID, groupNames, groupVar){
-#  tablesToCheck <- intersect(tablesToCheck, patientShouldAppearInThese)
+  
+  if (length(tablesToCheckWithPatientID) == 0) return(NULL)
+  
   cat("Session:", isolate(sessionID())," checking for patient appearance","\n", file = stderr())
   cat("Session:", isolate(sessionID())," checking group names","\n", file = stderr())  
   # exclude Missing because these patients are not assigned to a group
   groupNames <- groupNames[!groupNames %in% c("Missing")]
-  if (length(tablesToCheckWithPatientID)>0){
-    row <- 0
-    appearanceSummary <- initializeAppearanceSummary(groupVar, groupNames, tablesToCheckWithPatientID)
-    
-    for (groupName in groupNames){
-      patientsInGroup <- formattedTables[[indexTableName]][[patientVar]][formattedTables[[indexTableName]][[groupVar]] == groupName]
-      numberOfPatientsInGroup <- length(patientsInGroup)
-      for (tableName in tablesToCheckWithPatientID){
-        row <- row+1
-        appearanceSummary[row, groupVar] <- groupName
-        appearanceSummary[row, "table"] <- tableName
-        patientIDsInTable <- sum((patientsInGroup %in% formattedTables[[tableName]][[patientVar]]), na.rm = TRUE)
-        percent <-  round(100*patientIDsInTable/numberOfPatientsInGroup,1) 
-        appearanceSummary[row, "number"] <- patientIDsInTable
-        appearanceSummary[row, "percent"] <- percent
-      }
+  
+  if (length(groupNames) == 0) return(NULL)
+  
+  # now we know there is at least one table to examine and at least one 
+  # patient group
+  
+  appearanceSummary <- initializeAppearanceSummary(groupVar, groupNames, tablesToCheckWithPatientID)
+  row <- 0
+  for (groupName in groupNames){
+    patientsInGroup <- formattedTables[[indexTableName]][[patientVar]][formattedTables[[indexTableName]][[groupVar]] == groupName]
+    numberOfPatientsInGroup <- length(patientsInGroup)
+    for (tableName in tablesToCheckWithPatientID){
+      row <- row + 1
+      appearanceSummary[row, groupVar] <- groupName
+      appearanceSummary[row, "table"] <- tableName
+      patientIDsInTable <- sum((patientsInGroup %in% formattedTables[[tableName]][[patientVar]]), na.rm = TRUE)
+      percent <-  round(100*patientIDsInTable/numberOfPatientsInGroup,1) 
+      appearanceSummary[row, "number"] <- patientIDsInTable
+      appearanceSummary[row, "percent"] <- percent
     }
   }
-  else appearanceSummary <- NULL
+  # just in case there were no groups, etc
+  if (nrow(appearanceSummary) == 0){
+    appearanceSummary <- NULL
+  }
+  
   cat("Session:", isolate(sessionID())," appearance summary complete","\n", file = stderr())  
   
   return(appearanceSummary)

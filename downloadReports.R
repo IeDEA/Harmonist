@@ -563,14 +563,18 @@ generateDatasetSummary <- function(tableData, reportFormat){
   
   if (reportFormat =="pdf"){ reportFormat <- "latex"}
   
+  columnHeaderInfo <- c(3, length(ageGroupLabels))
+  names(columnHeaderInfo) <- c(" ", 
+                               paste0("Age at ", networkName, " Enrollment"))
+  
   if (reportFormat == "html"){
     tableSummaryKable <- kbl(tableSummary, format = "html", caption = tableTitle) %>% 
       kable_styling("bordered", full_width = FALSE, position = "left") %>% 
-      add_header_above(c(" " = 3, "Age at Enrollment" = length(ageGroupLabels)))
+      add_header_above(columnHeaderInfo)
   }
   else {
     tableSummaryKable <- kbl(tableSummary, format = "latex", longtable = T, booktabs = T, caption = tableTitle) %>% 
-      add_header_above(c(" " = 3, "Age at Enrollment" = length(ageGroupLabels)))
+      add_header_above(columnHeaderInfo)
                             #   caption = tableTitle, longtable = T, booktabs = T) %>% 
     #  add_header_above(c(" " = 3, "Age at Enrollment" = length(ageGroupLabels))) #%>% 
      # kable_styling(latex_options = c("repeat_header"))
@@ -711,9 +715,7 @@ createReport <- function(file, reportType = c("PDF", "html"),
     # if every patient in the index table is found in the other patient-linked
   # tables, no need to show an all-green heat map, just a statement:
   appearanceSummary <- errorTable()$appearanceSummary
-  if (nrow(appearanceSummary) == 0){
-    appearanceSummary <- NULL
-  } else {
+  if (!is.null(appearanceSummary)){
     if (all(appearanceSummary$percent == 100)){
       appearanceSummary$message <- paste0(
         "Every patient listed in ",

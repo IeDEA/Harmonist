@@ -52,6 +52,8 @@ source("server_name.R", local = TRUE)
 source("redcapTokens.R", local = TRUE)
 source("awsKey.R", local = TRUE)
 source("helpers.R", local = TRUE)
+source("REDCapURL.R", local = TRUE)
+source("REDCapCore.R", local = TRUE)
 source("definitions.R", local = TRUE)
 # specificDefinitions should be edited to match current research network specs
 source("specificDefinitions.R", local = TRUE)
@@ -162,6 +164,9 @@ shinyServer <- function(input, output, session){
   
   sessionID <- reactive(session$token)
   
+  # code to match uploaded data with data model
+  source("formattingTablesCode.R", local = TRUE)
+  
   # code for each page of application UI -------------------------------
   source("welcomeTab.R", local = TRUE)
   source("uploadTab.R", local = TRUE)
@@ -172,7 +177,7 @@ shinyServer <- function(input, output, session){
   source("feedbackTab.R", local = TRUE)
   source("exitTab.R", local = TRUE)
   
-  source("REDCapFunctions.R", local = TRUE)
+  source("REDCapHelpers.R", local = TRUE)
   source("modalFunctions.R", local = TRUE)
   source("dataQuality.R", local = TRUE)
   source("dateChecking.R", local = TRUE)
@@ -1357,7 +1362,7 @@ shinyServer <- function(input, output, session){
       return(NULL)
     }
   #  updateModal("Preparing tables for data quality checks")
-    source("formattingTablesCode.R", local = TRUE)
+
     # since time-consuming table formatting is about to begin,
     # set appBusy TRUE
     appBusy <<- TRUE

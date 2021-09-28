@@ -1,10 +1,6 @@
 # These variables will be unique to the research network
 
-# redcap url. Change if not using vanderbilt redcap
-redcap_url <- "https://redcap.vanderbilt.edu/api/" # edit for other servers
-
-
-AWS_bucket_name <- "" # only for networks with hub
+AWS_bucket_name <- "" # change - should be in 0C?
 
 datesInFuture <- "NEXT_VISIT_D"
 dateIndicatingUnknown <- c("1911-11-11") 

@@ -114,8 +114,28 @@ codeIndicatingInvalidCodeFormat <- 10000 # Make sure no codeList has this code
 LABEL_FOR_NOT_LINKED <- "Not Linked*"
 
 # data model definition -----------------------------------------------------------
-tableDef <- rjson::fromJSON(file = "Harmonist0A.json")
-codes <- rjson::fromJSON(file = "Harmonist0B.json")
+jsonResult <- getREDCapJSON("0A", tokenForHarmonist11)
+if (inherits(jsonResult, "postFailure") || is.null(jsonResult)) {
+  # use default file
+  tableDefFile <- getBackupJSONFile('0A')
+  warning("using backup Harmonist0A file: ", tableDefFile)
+} else {
+  tableDefFile <- jsonResult$filename
+  message("using Harmonist0A JSON file (version ", jsonResult$version, ") from REDCap")
+}
+tableDef <- rjson::fromJSON(file = tableDefFile)
+
+jsonResult <- getREDCapJSON("0B", tokenForHarmonist11)
+if (inherits(jsonResult, "postFailure") || is.null(jsonResult)) {
+  # use default file
+  codesFile <- getBackupJSONFile('0B')
+  warning("using backup Harmonist0B file: ", codesFile)
+} else {
+  codesFile <- jsonResult$filename
+  message("using Harmonist0B JSON file (version ", jsonResult$version, ") from REDCap")
+}
+codes <- rjson::fromJSON(file = codesFile)
+
 maxExtraVar <- 10 # number of non-data model column names to list in Toolkit UI
 
 # IeDEA-specific: link variables to DES website -------------------------
