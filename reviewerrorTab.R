@@ -165,6 +165,10 @@ makeDetailsPretty <- function(df, error_field, linkToDataModel){
     toShow <- toShow[, c(idCols, sort(otherCols))]
   }
   
+  if (any(df$quantity > 1, na.rm = TRUE)){
+    toShow$Quantity <- df$quantity
+  }
+  
   return(list(toShow = toShow,
               errorDesc = errorDesc))
   
@@ -184,8 +188,13 @@ summaryToShow <- reactive({
         arrange(category) %>% 
         arrange(severity)# %>% 
         #mutate("Error" = paste0(category,": ", variable))
-      # create an error name to list in table that only includes the variable name once:
-      summaryOut[["Error"]] <- ifelse(str_detect(summaryOut$category, summaryOut$variable), summaryOut$category, paste0(summaryOut$category,": ", summaryOut$variable))
+      # create an error name to list in table that only includes the variable name once and doesn't
+      # list a variable name for duplicate record errors
+      summaryOut[["Error"]] <- ifelse(
+        str_detect(summaryOut$category, summaryOut$variable) | 
+          str_detect(summaryOut$category, "Duplicate"),
+        summaryOut$category, 
+        paste0(summaryOut$category,": ", summaryOut$variable))
       colorLevel <- sapply(summaryOut$severity, function(x){
         if (x=="Error") {
           return("red")

@@ -15,18 +15,22 @@ addAges <- function(formattedTableData){
 
 addAgeGroupAndGroup <- function(formattedTableData, groupByVar){
   formattedTableData[[indexTableName]]$ageGroup <- NA
-  ageGroupLevels <- names(ageGroups)
-  for (ageGroup in ageGroupLevels){
-    formattedTableData[[indexTableName]][which((formattedTableData[[indexTableName]]$age >= ageGroups[[ageGroup]]$lower) &
-                                    (formattedTableData[[indexTableName]]$age < ageGroups[[ageGroup]]$upper + 1) ),
-                              "ageGroup"] <- ageGroup
-  }
-  if (any(is.na(formattedTableData[[indexTableName]]$ageGroup))){
+  # if age groups were specified, add to table
+  if (!is_empty(ageGroups)){
+    ageGroupLevels <- names(ageGroups)
+    for (ageGroup in ageGroupLevels){
+      formattedTableData[[indexTableName]][which((formattedTableData[[indexTableName]]$age >= ageGroups[[ageGroup]]$lower) &
+                                                   (formattedTableData[[indexTableName]]$age < ageGroups[[ageGroup]]$upper + 1) ),
+                                           "ageGroup"] <- ageGroup
+    }
+    if (any(is.na(formattedTableData[[indexTableName]]$ageGroup))){
       formattedTableData[[indexTableName]][which(is.na(formattedTableData[[indexTableName]]$ageGroup)),"ageGroup"] <- "Unknown" 
       ageGroupLevels <- c(ageGroupLevels, "Unknown")
+    }
+    
+    formattedTableData[[indexTableName]]$ageGroup <- factor(formattedTableData[[indexTableName]]$ageGroup, levels = ageGroupLevels)
   }
-
-  formattedTableData[[indexTableName]]$ageGroup <- factor(formattedTableData[[indexTableName]]$ageGroup, levels = ageGroupLevels)
+  
   
   #groupLevels <- sort(unique(formattedTableData[[indexTableName]][[groupByVar]]))
   #formattedTableData[[indexTableName]][[groupByVar]] <- factor(formattedTableData[[indexTableName]][[groupByVar]],

@@ -86,7 +86,8 @@ addGeneralError <- function(groupVar,
 }
 
 
-addToErrorFrame <- function(indexTable, groupVar, errorFrame, table, field, tableName, errorType, errorCode, severity, message, ...){ 
+addToErrorFrame <- function(indexTable, groupVar, errorFrame, table, field, tableName, errorType, 
+                            errorCode, severity, message, ...){ 
   idList <- tableIDField[[tableName]]
   idColumns <- c()
   for (i in 1:length(idList)){
@@ -176,7 +177,12 @@ addToErrorFrame <- function(indexTable, groupVar, errorFrame, table, field, tabl
   newErrors$severity <- severity
   newErrors$description <- message
   newErrors$errorCode <- errorCode
-  newErrors$quantity <- 1
+  # if the error already includes a count of error records, use that quantity
+  if ("quantity" %in% names(table)){
+    newErrors$quantity <- table$quantity
+  } else {
+    newErrors$quantity <- 1
+  }
   
   index <- paste0(tableName, field, errorType)
   if (exists(index, errorFrame)) {
@@ -669,13 +675,16 @@ duplicateRecordChecks <- function(errorFrame, resources){
   for (tableName in resources$tablesAndVariables$tablesToCheck[!(resources$tablesAndVariables$tablesToCheck %in% duplicateRecordExceptions)]){
     print(paste0("checking for duplicates in ", tableName))
     idFields <- tableIDField[[tableName]]
-    table <- as_tibble(resources$formattedTables[[tableName]][, c(groupVar, idFields)])
+    table <- as_tibble(resources$uploadedTables[[tableName]][, idFields])
     if (uniqueN(table) == nrow(table)){
       # this means there are no duplicate combinations of key identifiers
       next
     }
     print(paste0("before dupRows", Sys.time()))
-    duplicates <- table %>% group_by_all() %>% summarise(n = n()) %>% ungroup() %>% filter(n > 1)
+    # quantity = the number of rows that are DUPLICATES of a previous row - 
+    # subtract the original row from the count
+    duplicates <- table %>% group_by_all() %>% summarise(quantity = n() - 1) %>%
+      ungroup() %>% filter(quantity > 0)
     print(paste0("after dupRows", Sys.time()))
     
     if (nrow(duplicates) == 0) { 
@@ -684,7 +693,7 @@ duplicateRecordChecks <- function(errorFrame, resources){
     }
     print("Duplicates found")
     print(nrow(duplicates))
-    #otherwise, we know there are duplicates
+    # otherwise, we know there are duplicates
     # check first for tables with patientVar as unique identifier; a duplicate record in that case 
     # is an error that requires explanation
     if ((length(idFields) == 1) && (idFields[[1]] == patientVar)){
@@ -696,13 +705,14 @@ duplicateRecordChecks <- function(errorFrame, resources){
       message <- paste(
         "This record has key identifier", makeItPluralOrNot("value", length(idFields)), 
         paste0("(", paste(idFields, collapse = ", "), ")"),
-        "that duplicate another record in this table.")
+        "that duplicate other record(s) in this table.")
       severity <- "Error"
     }
     
     print("about to add duplicates to error frame")
     errorFrame <- addToErrorFrame(resources$formattedTables[[indexTableName]],
-                                  resources$finalGroupChoice, errorFrame, duplicates, 
+                                  resources$finalGroupChoice, errorFrame, 
+                                  duplicates, 
                                   idFields[1], tableName, 
                                   "Duplicate Record", 
                                   errorCode = errorCode, 
@@ -933,6 +943,7 @@ findPatients <- function(formattedTables, tablesToCheckWithPatientID, groupNames
   
   return(appearanceSummary)
 }
+
 
 sumThem <- function(x,y){
   out <- rowSums(data.frame(x,y), na.rm=TRUE)

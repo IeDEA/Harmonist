@@ -50,7 +50,7 @@ if (!(params$datasetDesc=="")){
 ```
 \centering
 
-# ![](iedeaLogoSmall.png) Harmonist Data Toolkit Report for `r groupVar` `r program`
+# ![](project_logo_50_20.png) Harmonist Data Toolkit Report for `r groupVar` `r program`
 
 `r headerMessage` `r regionMessage`
 
@@ -73,6 +73,10 @@ knitr::opts_chunk$set(
 
 ```{r summary2, echo=FALSE, fig.align='left', message=FALSE, warning=FALSE, results='asis'}
 print(params$datasetSummary$tableSummaryKable)
+
+if (!is.null(params$datasetSummary$srnSummaryKable)){
+  print(params$datasetSummary$srnSummaryKable)
+}
 ```
 
 ```{r summarytable, echo=FALSE, message=FALSE, warning=FALSE, fig.width = 6, fig.height = 3, results='asis'}
@@ -94,8 +98,8 @@ if (params$includeErrorSummary){
    if (is.null(params$datasetQuality$missingAndUnknownPlot)){
      cat("\n")
     cat("\n")
-
-    cat("No important variables have missing/unknown entries", "\n")
+   # revisit this logic *************************************************
+   # cat("No important variables have missing/unknown entries", "\n")
   } else {
     print(params$datasetQuality$missingAndUnknownPlot)
   }

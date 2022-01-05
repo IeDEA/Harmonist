@@ -56,7 +56,7 @@ maxNumberOfHeatMapCharX <- 10
 ```
 
 
-# `r knitr::include_graphics("iedeaLogoSmall.png")` Harmonist Data Toolkit Report
+# `r knitr::include_graphics("project_logo_50_20.png")` Harmonist Data Toolkit Report
 
 `r headerMessage` `r regionMessage`
 
@@ -78,6 +78,7 @@ Total number of patients in dataset: `r format(params$datasetSummary$totalPatien
 
 ```{r summary2, echo=FALSE, fig.align='left', message=FALSE, warning=FALSE, results='asis'}
 sumTables <- params$datasetSummary$tableSummaryKable
+sumSRN <- params$datasetSummary$srnSummaryKable
 ```
 
 ```{r listOfPrograms, echo=FALSE, message=FALSE, warning=FALSE, results='asis'}
@@ -109,6 +110,12 @@ if (is_empty(groups)){
 
 sumTables %>% kable_styling(position = "left") 
 cat("\n")
+
+if (!is.null(sumSRN)){
+  sumSRN
+}
+cat("\n")
+
 if (!is.null(sumGroups)){
   sumGroups
   cat("\n")

@@ -317,36 +317,362 @@ checkForDeprecatedCodes <- function(errorFrame, resources){
 }
 
 
-####################################################################
+###############################################################
+# SRN-specific checks
+baselineCheckSRN <- function(errorFrame, resources){
+  if (!exists("requiredAtBaseline")) return(errorFrame)
+  
+  srntable <- resources$formattedTables[[srnTableName]]
+  for (varName in requiredAtBaseline){
+    badRecords <- srntable %>% 
+      filter(redcap_event_name == labelForBaselineArm1) %>%  # in specificDefinitions.R
+      filter(!! rlang::sym(varName) %in% c(NA, "Missing")) %>% 
+      pull("recordIndex")
+    
+    if (is_empty(badRecords)) next
+    
+    colsForErrorFrame <- c(tableIDField[[srnTableName]], varName)
+    message <- paste0(
+      varName, " is required at SRN baseline but was missing."
+    )
+      
+    errorFrame <- addToErrorFrame(
+      indexTable = resources$formattedTables[[indexTableName]],
+      groupVar = resources$finalGroupChoice,
+      errorFrame = errorFrame,
+      table = resources$uploadedTables[[srnTableName]][badRecords, colsForErrorFrame],
+      field = varName,
+      tableName = srnTableName,
+      errorType = "Missing SRN baseline value",
+      errorCode = "1.9a",
+      severity = "Error",
+      message = message
+    )
+  }
+  return(errorFrame)
+}
+
+srnSexCheck <- function(errorFrame, resources){
+  # we know that the column sex is in supSRN because it is required
+  # same for SEX in tblBAS
+  sexBAS <- "SEX"
+  sexSRN <- "sex"
+
+  colsFromSRN <- c(tableIDField[[srnTableName]], sexSRN, "recordIndex")
+
+  srntable <- resources$formattedTables[[srnTableName]][, colsFromSRN] %>% 
+    filter(redcap_event_name == labelForBaselineArm1) %>% 
+    rename(recordIndexSRN = recordIndex)
+  
+  badRecordTable <- resources$formattedTables[[indexTableName]] %>% 
+    select(!!patientVarSym, !!rlang::sym(sexBAS), recordIndex) %>% 
+    rename(recordIndexBAS = recordIndex) %>% 
+    left_join(srntable, by = patientVar) %>% 
+    filter(!!rlang::sym(sexSRN) != !!rlang::sym(sexBAS)) 
+  
+  if (nrow(badRecordTable) == 0) return(errorFrame)
+  
+  badRecordTable <- badRecordTable %>% 
+    mutate(message = paste("Sex at birth was coded as",
+                           !!rlang::sym(sexBAS),
+                           "in tblBAS but was",
+                           !!rlang::sym(sexSRN), 
+                           "in supSRN for this patient", 
+                           sep = " "))
+  
+  colsForErrorFrame <- c(tableIDField[[srnTableName]], sexSRN)
+  
+  errorFrame <- addToErrorFrame(
+    indexTable = resources$formattedTables[[indexTableName]],
+    groupVar = resources$finalGroupChoice,
+    errorFrame = errorFrame,
+    table = resources$uploadedTables[[srnTableName]][badRecordTable$recordIndexSRN, colsForErrorFrame],
+    field = sexSRN,
+    tableName = srnTableName,
+    errorType = "SRN sex conflict",
+    errorCode = "2.3h",
+    severity = "Error",
+    message = badRecordTable$message,
+    error_field2 = sexBAS,
+    error2 = as.character(resources$uploadedTables[[indexTableName]][badRecordTable$recordIndexBAS, sexBAS])
+  )
+  return(errorFrame)
+}
+
+#######################################################################
+# is birth_d in supSRN the same as BIRTH_D in tblBAS?
+srnBirthDateCheck <- function(errorFrame, resources){
+
+  colsFromSRN <- c(tableIDField[[srnTableName]], srnBirthDateVar, "recordIndex")
+  colsForErrorFrame <- c(tableIDField[[srnTableName]], srnBirthDateVar)
+  
+  indexTable <- resources$formattedTables[[indexTableName]]
+  
+  # global checks will already flag date with birth_d before BIRTH_D, 
+  # here we primarily need to check for birth_d after BIRTH_D
+  
+  badRecordTable <- resources$formattedTables[[srnTableName]][, colsFromSRN] %>% 
+    filter(redcap_event_name == labelForBaselineArm1) %>% 
+    rename(recordIndexSRN = recordIndex) %>% 
+    left_join(indexTable, by = patientVar) %>% 
+    filter(!!rlang::sym(srnBirthDateVar) != !!birthDateVarSym)
+
+  if (nrow(badRecordTable) == 0) return(errorFrame)
+  
+  message <- paste0("Birth date conflict between ",
+                    srnTableName, " and ", indexTableName, ".")
+  
+  birthDateApproxVar <- paste0(birthDateVar, projectDef$date_approx)
+  
+  ######################################################################
+  # Case 1: no date approximation, all are errors, return from function
+  if (!exists(birthDateApproxVar, badRecordTable)){
+    errorFrame <- addToErrorFrame(
+      indexTable = resources$formattedTables[[indexTableName]],
+      groupVar = resources$finalGroupChoice,
+      errorFrame = errorFrame,
+      table = resources$uploadedTables[[srnTableName]][badRecordTable$recordIndexSRN, colsForErrorFrame],
+      field = srnBirthDateVar,
+      tableName = srnTableName,
+      errorType = "SRN birth_d conflict",
+      errorCode = "2.3i",
+      severity = "Error",
+      message = message,
+      error_field2 = birthDateVar,
+      error2 = as.character(resources$uploadedTables[[indexTableName]][badRecordTable$recordIndex, birthDateVar])
+    )
+    return(errorFrame)
+  }
+  
+  ###############################################################
+  # If we get to this point, we know that date approx exists and potential errors exist
+  
+  allBadPatients <- badRecordTable[[patientVar]]
+  
+  ##############################################################
+  #Case 2: date approx is "D", blank, or invalid
+  toTheDateLabels <- c("Exact to the date", "NA", "Missing", "Invalid Code")
+  toTheDate <- badRecordTable %>% 
+    filter(!!rlang::sym(birthDateApproxVar) %in% toTheDateLabels) 
+  
+  if (nrow(toTheDate) > 0){
+    toTheDate <- toTheDate %>% 
+      mutate(message = paste(message, "Note that the date approximation for", 
+                             birthDateVar, "is",
+                             paste0(!!rlang::sym(birthDateApproxVar), "."),
+                             sep = " "))
+    
+    errorFrame <- addToErrorFrame(
+      indexTable = resources$formattedTables[[indexTableName]],
+      groupVar = resources$finalGroupChoice,
+      errorFrame = errorFrame,
+      table = resources$uploadedTables[[srnTableName]][toTheDate$recordIndexSRN, colsForErrorFrame],
+      field = srnBirthDateVar,
+      tableName = srnTableName,
+      errorType = "SRN birth_d conflict",
+      errorCode = "2.3i",
+      severity = "Error",
+      message = toTheDate$message,
+      error_field2 = birthDateVar,
+      error2 = as.character(resources$uploadedTables[[indexTableName]][toTheDate$recordIndex, birthDateVar]),
+      error_field3 = birthDateApproxVar,
+      error3 = as.character(resources$uploadedTables[[indexTableName]][toTheDate$recordIndex, birthDateApproxVar])
+    )
+  }
+
+  ############### are there more records to check? ################
+  remainingPatients <- allBadPatients[!allBadPatients %in% toTheDate[[patientVar]]]
+  
+  if (is_empty(remainingPatients)) return(errorFrame)
+  
+  ##################################################################
+  #Case 3: date approx is "M". Only error if year and month do not match.
+  toTheMonthLabels <- c("Exact to the month")
+  toTheMonth <- badRecordTable %>% 
+    filter(!!rlang::sym(birthDateApproxVar) %in% toTheMonthLabels) %>% 
+    filter(year(!!rlang::sym(srnBirthDateVar)) != year(!!birthDateVarSym)) %>% 
+    filter(month(!!rlang::sym(srnBirthDateVar)) != month(!!birthDateVarSym))
+  
+  if (nrow(toTheMonth) > 0){
+      
+    toTheMonth <- toTheMonth %>% 
+      mutate(message = paste("The year and month of",
+                             srnBirthDateVar, "and",
+                             birthDateVar,
+                             "should match when the date approximation is",
+                             paste0(!!rlang::sym(birthDateApproxVar), "."),
+                             sep = " "))
+
+    errorFrame <- addToErrorFrame(
+      indexTable = resources$formattedTables[[indexTableName]],
+      groupVar = resources$finalGroupChoice,
+      errorFrame = errorFrame,
+      table = resources$uploadedTables[[srnTableName]][toTheMonth$recordIndexSRN, colsForErrorFrame],
+      field = srnBirthDateVar,
+      tableName = srnTableName,
+      errorType = "SRN birth_d conflict",
+      errorCode = "2.3i",
+      severity = "Error",
+      message = toTheMonth$message,
+      error_field2 = birthDateVar,
+      error2 = as.character(resources$uploadedTables[[indexTableName]][toTheMonth$recordIndex, birthDateVar]),
+      error_field3 = birthDateApproxVar,
+      error3 = as.character(resources$uploadedTables[[indexTableName]][toTheMonth$recordIndex, birthDateApproxVar])
+    )
+  }
+  
+  ##############################################################
+  # Case 4: Date approx is to the year. Error only if years don't match
+  toTheYearLabels <- c("Exact to the year")
+  toTheYear <- badRecordTable %>% 
+    filter(!!rlang::sym(birthDateApproxVar) %in% toTheYearLabels) %>% 
+    filter(year(!!rlang::sym(srnBirthDateVar)) != year(!!birthDateVarSym))
+  
+  if (nrow(toTheYear) > 0){
+    toTheYear <- toTheYear %>% 
+             mutate(message = paste("The year of",
+                             srnBirthDateVar, "and",
+                             birthDateVar,
+                             "should match when the date approximation is",
+                             paste0(!!rlang::sym(birthDateApproxVar), "."),
+                             sep = " "))
+    
+    errorFrame <- addToErrorFrame(
+      indexTable = resources$formattedTables[[indexTableName]],
+      groupVar = resources$finalGroupChoice,
+      errorFrame = errorFrame,
+      table = resources$uploadedTables[[srnTableName]][toTheYear$recordIndexSRN, colsForErrorFrame],
+      field = srnBirthDateVar,
+      tableName = srnTableName,
+      errorType = "SRN birth_d conflict",
+      errorCode = "2.3i",
+      severity = "Error",
+      message = toTheYear$message,
+      error_field2 = birthDateVar,
+      error2 = as.character(resources$uploadedTables[[indexTableName]][toTheYear$recordIndex, birthDateVar]),
+      error_field3 = birthDateApproxVar,
+      error3 = as.character(resources$uploadedTables[[indexTableName]][toTheYear$recordIndex, birthDateApproxVar])
+    )
+  }
+  
+  #################################################################
+  
+  ##############################################################
+  # Case 5: Date approx is known to be before this date. Error only if BIRTH_D is before birth_d
+  lessThanLable <- "Before this date"
+  lessThan <- badRecordTable %>% 
+    filter(!!rlang::sym(birthDateApproxVar) %in% lessThanLable) %>% 
+    filter(!!rlang::sym(srnBirthDateVar) > !!birthDateVarSym)
+  
+
+  
+  if (nrow(lessThan) > 0){
+    message <- paste(birthDateVar , "should not be before ",
+                     srnBirthDateVar,
+                     "when the date approximation is <",
+                     sep = " ")
+    
+    errorFrame <- addToErrorFrame(
+      indexTable = resources$formattedTables[[indexTableName]],
+      groupVar = resources$finalGroupChoice,
+      errorFrame = errorFrame,
+      table = resources$uploadedTables[[srnTableName]][lessThan$recordIndexSRN, colsForErrorFrame],
+      field = srnBirthDateVar,
+      tableName = srnTableName,
+      errorType = "SRN birth_d conflict",
+      errorCode = "2.3i",
+      severity = "Error",
+      message = message,
+      error_field2 = birthDateVar,
+      error2 = as.character(resources$uploadedTables[[indexTableName]][lessThan$recordIndex, birthDateVar]),
+      error_field3 = birthDateApproxVar,
+      error3 = as.character(resources$uploadedTables[[indexTableName]][lessThan$recordIndex, birthDateApproxVar])
+    )
+  }
+  #################################################################
+  
+  ##############################################################
+  # Case 6: Date approx is known to be after this date. Error only if BIRTH_D is after birth_d
+  moreThanLable <- "After the date"
+  moreThan <- badRecordTable %>% 
+    filter(!!rlang::sym(birthDateApproxVar) %in% moreThanLable) %>% 
+    filter(!!rlang::sym(srnBirthDateVar) < !!birthDateVarSym)
+  
+  if (nrow(moreThan) > 0){
+    message <- paste(birthDateVar , "should not be after",
+                     srnBirthDateVar,
+                     "when the date approximation is >",
+                     sep = " ")
+    
+    errorFrame <- addToErrorFrame(
+      indexTable = resources$formattedTables[[indexTableName]],
+      groupVar = resources$finalGroupChoice,
+      errorFrame = errorFrame,
+      table = resources$uploadedTables[[srnTableName]][moreThan$recordIndexSRN, colsForErrorFrame],
+      field = srnBirthDateVar,
+      tableName = srnTableName,
+      errorType = "SRN birth_d conflict",
+      errorCode = "2.3i",
+      severity = "Error",
+      message = message,
+      error_field2 = birthDateVar,
+      error2 = as.character(resources$uploadedTables[[indexTableName]][moreThan$recordIndex, birthDateVar]),
+      error_field3 = birthDateApproxVar,
+      error3 = as.character(resources$uploadedTables[[indexTableName]][moreThan$recordIndex, birthDateApproxVar])
+    )
+  }
+  #################################################################
+  
+  
+  ##############################################################
+  # Case 7: Date approx is uncertain but date is provided in supSRN
+  uncertainLable <- c("Unknown")
+  uncertain <- badRecordTable %>% 
+    filter(!!rlang::sym(birthDateApproxVar) %in% uncertainLable)
+
+  if (nrow(uncertain) > 0){
+    message <- paste(birthDateVar , "is coded as Unknown but a value is provided for",
+                     srnBirthDateVar,
+                     "in",
+                     srnTableName,
+                     sep = " ")
+    
+    errorFrame <- addToErrorFrame(
+      indexTable = resources$formattedTables[[indexTableName]],
+      groupVar = resources$finalGroupChoice,
+      errorFrame = errorFrame,
+      table = resources$uploadedTables[[srnTableName]][uncertain$recordIndexSRN, colsForErrorFrame],
+      field = srnBirthDateVar,
+      tableName = srnTableName,
+      errorType = "SRN birth_d conflict - Unknown",
+      errorCode = "2.3j",
+      severity = "Warning",
+      message = message,
+      error_field2 = birthDateVar,
+      error2 = as.character(resources$uploadedTables[[indexTableName]][uncertain$recordIndex, birthDateVar]),
+      error_field3 = birthDateApproxVar,
+      error3 = as.character(resources$uploadedTables[[indexTableName]][uncertain$recordIndex, birthDateApproxVar])
+    )
+  }
+  #################################################################
+  
+  
+  return(errorFrame)
+  
+}
+
+#########################################################################
+
+
+# TO ADD:
+
+#########################################################################
 # compare dates with CLOSE_D and OPEN_D #################################
 # 
-# checkForDeprecatedCodes <- function(errorFrame, resources){
-#   for(tableName in resources$tablesAndVariables$tablesToCheck){
-#     table <- get(tableName, resources$uploadedTables)
-#     formattedTable <- get(tableName, resources$formattedTables)
-#     variablesInTable <- names(formattedTable)
-#     codedFieldNames <- intersect(variablesInTable, findVariablesMatchingCondition(tableName, tableDef, "has_codes","Y"))
-#     if (is_empty(codedFieldNames)) next
-#     for (codedField in codedFieldNames){
-#       deprecatedRows <- which(str_detect(formattedTable[[codedField]], "deprecat"))
-#       if (is_empty(deprecatedRows)) next
-#       message <- formattedTable[deprecatedRows, codedField]
-#       errorFrame <- addToErrorFrame(resources$formattedTables[[indexTableName]],
-#                                     resources$finalGroupChoice, errorFrame, 
-#                                     resources$uploadedTables[[tableName]][deprecatedRows,], 
-#                                     codedField, 
-#                                     tableName, 
-#                                     "Deprecated code", 
-#                                     errorCode = "1.2c",
-#                                     "Warning", message
-#       )
-#     }
-#   }
-#   return(errorFrame)
-# }
 # 
+# #######################################################################
 
-
+#########################################################################
 #NOT CURRENTLY IMPLEMENTED
 checkPatientVisits <- function(errorFrame, resources){
   tblVIS <- resources$formattedTables$tblVIS

@@ -226,6 +226,10 @@ color: #111;
 background-color: #BEBEBE;
 color: #111;
 }
+.des-oth{
+background-color: #f0f0f5;
+color: #111;
+}
 #dataQualityChecks .modal-body .fa-check{
 color:#00a65a !important;
 }

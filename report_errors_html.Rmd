@@ -15,7 +15,7 @@ params:
 
 
 ```{r, echo=FALSE, out.width='20%', fig.align='center'}
-knitr::include_graphics("iedeaLogoSmall.png")
+knitr::include_graphics("project_logo_50_20.png")
 ```
 
 # Harmonist Data Quality Report: Error Detail by Table

@@ -8,5 +8,15 @@
     "tableName": "tblDIS",
     "firstDate": "DIS_D",
     "secondDate": "DIS_ED"
+  },
+  "3":{
+  	"tableName": "tblCENTER",
+	"firstDate": "ADD_CENTER_D",
+	"secondDate": "DROP_CENTER_D"
+  },
+  "4":{
+    "tableName": "supSRN",
+    "firstDate": "birth_d",
+    "secondDate": "ic_dt"
   }
 }

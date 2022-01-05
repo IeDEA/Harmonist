@@ -10,6 +10,11 @@ observeEvent(input$backToStep2,{
   updateTabItems(session,"tabs", "reviewerror")
 })
 
+# If the user has file format errors and chooses to return to step 1:
+observeEvent(input$formatErrGoBack,{
+  updateTabItems(session,"tabs", "upload")
+})
+
 
 output$submitSummary <- renderUI({
   
@@ -103,19 +108,36 @@ output$submitSummary <- renderUI({
     justCritical <- sum(errors$criticalErrors$Count)
     justErrors <- totalErrors - justCritical
     
+    fileFormatErr <- uploadList()$nonmatchingFileFormats
+    if (!is_empty(fileFormatErr)){
+      justFileFormatErr <- length(fileFormatErr)
+    } else {
+      justFileFormatErr <- 0
+    }
+    
     readyMsg <- tags$p(tags$b(span(icon("check-square"),"Ready to transfer data")))
     summaryBoxStatus <- "success" # will change to warning if critical errors exist
     criticalBullet <- NULL
+    badFileBullet <- NULL
     warningBullet <- NULL
     criticalFlag <- FALSE
     
-    if ((totalErrors + totalWarnings) == 0){
+    if ((totalErrors + totalWarnings + justFileFormatErr) == 0){
       errorBullet <- tags$li(span("0 data quality issues", 
                                   class = "text-green", style = "font-weight: bold"),
                              "detected.")
       readyToSubmit(TRUE)
       
     } else {
+      if (justFileFormatErr > 0){
+        badFileMsg <- paste("uploaded", 
+                            makeItPluralOrNot("file", length(fileFormatErr)),
+                            makeItPluralOrNot("does", length(fileFormatErr)),
+                            "not match requested format.",
+                            collapse = " ")
+      } else {
+        badFileMsg <- NULL
+      }
       if (justCritical > 0 && justErrors > 0) additional <- "additional"
       else additional <- NULL
       
@@ -127,6 +149,14 @@ output$submitSummary <- renderUI({
                                 makeItPluralOrNot("error", justCritical), "detected.",
                                 warnAboutExplain)
       
+      # only include file format info if error
+      if (justFileFormatErr > 0){
+        badFileBullet <- tags$li(span("Critical", class="badge badge-critical"),
+                                 tags$b(justFileFormatErr), badFileMsg,
+                                 warnAboutExplain)
+      } else badFileBullet <- NULL
+      
+      
       errorBullet <- tags$li(span("Error", class="badge badge-error"),
                              tags$b(justErrors), additional, 
                              makeItPluralOrNot("error", justErrors), "detected.")
@@ -137,7 +167,7 @@ output$submitSummary <- renderUI({
                                "data quality",
                                makeItPluralOrNot("issue", totalWarnings), "detected.")
       
-      if (justCritical == 0) readyToSubmit(TRUE)
+      if (justCritical + justFileFormatErr == 0) readyToSubmit(TRUE)
       
       # if any major errors exist, remove "Ready to transfer..." message
       if (justCritical > 0){
@@ -151,6 +181,50 @@ output$submitSummary <- renderUI({
                   ".",
                   "If you choose to proceed, any remaining critical errors require explanation below."
           )
+        )
+      }
+      # if there were requested files in a format other than a requested format, notify
+      if (!is_empty(uploadList()$nonmatchingFileFormats)){
+        nonmatchingFlag <- TRUE
+        # if critical flag is TRUE, summary box status and ready msg have already been changed. 
+        # If critical flag is FALSE, this needs to be done now. Set status to warning and remove ready msg
+        if (!criticalFlag){
+          summaryBoxStatus <- "warning"
+          readyMsg <- ""
+        }
+        nonmatchingFiles <- uploadList()$nonmatchingFileFormats
+        reqFormats <- concept()$requestedFormats
+        requestedmsg <- paste(reqFormats, 
+                              paste0(".",concept()$requestedExtensions), sep = " (")
+        requestedmsg <- glue::glue_collapse(
+          paste0(requestedmsg, ")"), 
+          sep = ", ",
+          last = " and ")
+        
+        nonmatchingMessage <- 
+          
+          tags$em(makeItPluralOrNot("File", length(nonmatchingFiles)),
+                  glue::glue_collapse(nonmatchingFiles, sep = ", ", last = " and "),
+                  makeItPluralOrNot("does", length(nonmatchingFiles)),
+                  "not match the",
+                  " requested file",  
+                  paste0(makeItPluralOrNot("format", length(reqFormats)), ":"), 
+                  paste0(requestedmsg, "."),
+                  "Note that CSV file format is always an acceptable option.",
+                  " To review requested file formats and upload revised files, return to ",
+                  actionButton("formatErrGoBack", "Step 1", style='padding:4px; font-size:100%'),
+                  "."
+          )
+        
+
+        fileMsg <- tags$p(
+          tags$strong(span(icon("exclamation-triangle"),"Critical file format errors.")),
+          nonmatchingMessage
+                  
+          )
+        readyMsg <- tagList(
+          readyMsg,
+          fileMsg
         )
       }
     }
@@ -179,6 +253,7 @@ output$submitSummary <- renderUI({
               tags$p(tags$b("Error Summary:")),
               tags$ul(
                 criticalBullet,
+                badFileBullet,
                 errorBullet,
                 warningBullet
               ),
@@ -201,14 +276,29 @@ output$submitSummary <- renderUI({
 ######################## code related to explaining critical errors
 
 criticalSummary <- reactive({
-  if (is.null(errorTable()$criticalErrors)) return(NULL)
-  if (nrow(errorTable()$criticalErrors) == 0) return(NULL)
+  if (is.null(errorTable()[[1]])) return(NULL)
+  if ( (is.null(errorTable()$criticalErrors) ||
+        nrow(errorTable()$criticalErrors) == 0) && 
+       is_empty(uploadList()$nonmatchingFileFormats) ){
+    return(NULL)
+  } 
   critical <- errorTable()$criticalErrors
   critical <- critical %>% 
     mutate(tableAndCount = paste0(table, " (", Count, ")")) %>% 
     group_by(category, error_field) %>% 
     summarise(tables = combine_words(tableAndCount)) %>% ungroup() %>% 
     mutate(toShow = paste(category, error_field, "in", tables)) %>% select(toShow)
+
+  if (!is_empty(uploadList()$nonmatchingFileFormats)){
+    badFiles <- uploadList()$nonmatchingFileFormats
+    badFileMessage <- paste0(makeItPluralOrNot("File", length(badFiles)),
+                      " not in compliance with the requested format: ",
+                      paste(badFiles, collapse = ", "))
+    critical <- critical %>% add_row(toShow = badFileMessage)
+  }
+  
+  
+
   return(critical)
 })
 
@@ -216,11 +306,13 @@ criticalSummary <- reactive({
 
 observe({
   if (is.null(errorTable()[[1]])) return(NULL)
-  if (is.null(errorTable()$criticalErrors)){
+  if (is.null(errorTable()$criticalErrors) && 
+      is_empty(uploadList()$nonmatchingFileFormats)){
     readyToSubmit(TRUE)
     return(NULL)
   }
-  if (nrow(errorTable()$criticalErrors) == 0){
+  if (nrow(errorTable()$criticalErrors) == 0 && 
+      is_empty(uploadList()$nonmatchingFileFormats)){
     readyToSubmit(TRUE)
     return(NULL)
   }
@@ -228,7 +320,6 @@ observe({
     readyToSubmit(FALSE)
     return(NULL)
   }
-
   boxes <- criticalSummary()
   boxContents <- list()
   for (boxNum in 1:nrow(boxes)){
@@ -255,8 +346,8 @@ output$explainCritical <- renderUI({
   if (is.null(startDQ())) return(NULL)
   if (!hubInfo$fromHub) return(NULL)
   if (is.null(errorTable()[[1]])) return(NULL)
-  if (is.null(errorTable()$criticalErrors)) return(NULL)
-  if (sum(errorTable()$criticalErrors$Count) == 0) return(NULL)
+  if (is.null(errorTable()$criticalErrors) && is_empty(uploadList()$nonmatchingFileFormats)) return(NULL)
+  if (sum(errorTable()$criticalErrors$Count) == 0 && is_empty(uploadList()$nonmatchingFileFormats)) return(NULL)
   if (!is.null(submitSuccess())) return(NULL)
   
   critical <- criticalSummary()
@@ -273,9 +364,18 @@ output$explainCritical <- renderUI({
       shiny::tagAppendAttributes(style = 'width: 95%;')
   }
   
+  # if there is only one type of critical error and it is actually file format error, 
+  # different message:
+  if (nrow(critical) == 1 &&
+      str_detect(critical$toShow[[1]], "requested format")){
+     msg <- "Using the space below, please justify submitting files that do not match the requested format."
+  } else {
+    msg <- "Using the space below, please justify the inclusion of records found containing critical errors."
+  }
+  
   return(
     fluidRow(
-      tags$p("Using the space below, please justify the inclusion of records found containing critical errors."),
+      tags$p(msg),
       textBoxList
     )
   )
@@ -289,16 +389,47 @@ output$submitOptions <- renderUI({
   if (is.null(errorTable()[[1]])) return(NULL)
   if (!is.null(submitSuccess())) return(NULL)
   
+  # if any files didn't match requested format, explanation required
+  # and check for errors to see if explanation is required
+  badFormatFlag <- FALSE
+  criticalFlag <- FALSE
+  if (!is_empty(uploadList()$nonmatchingFileFormats)){
+    badFormatFlag <- TRUE
+  } 
   if (is.null(errorTable()$criticalErrors)){ #this means there were no errors of any kind
     criticalFlag <- FALSE
   } else if (nrow(errorTable()$criticalErrors) == 0) { #there were errors but none critical
     criticalFlag <- FALSE
-  } else if (sum(errorTable()$criticalErrors$Count) > 0) { #critical errors
+  } else if (sum(errorTable()$criticalErrors$Count) > 0) { #critical errors exist
     criticalFlag <- TRUE
   }
   
-  if (criticalFlag){
-    warningMsg <- "Please correct critical errors before submitting your dataset. Remaining critical errors must be explained below."
+  explainFlag <- badFormatFlag || criticalFlag
+  
+  
+  if (explainFlag){
+    if (criticalFlag){
+      criticalMsg <- "critical errors"
+    } else {
+      criticalMsg <- ""
+    }
+    
+    if (badFormatFlag){
+      badFormatMsg <- "file formats"
+    } else {
+      badFormatMsg <- ""
+    }
+    
+    if (badFormatFlag && criticalFlag){
+      connector <- "and"
+    } else {
+      connector <- ""
+    }
+    
+    warningMsg <- paste("Please correct",
+                         criticalMsg, connector, badFormatMsg,
+                         "before submitting your dataset. Remaining critical issues must be explained below.",
+                        collapse = " ")
   } else {
     warningMsg <- NULL
   }
@@ -327,7 +458,7 @@ output$submitOptions <- renderUI({
     )
   
   # if critical errors exist-----------------------------------------------------------
-  if (criticalFlag){
+  if (explainFlag){
     submitStatus <- NULL
     titleText <- "Submit Data with Critical Errors"
     submitButton <- shinyjs::disabled(actionButton("submit", "Submit Data"))
@@ -341,13 +472,12 @@ output$submitOptions <- renderUI({
       solidHeader = TRUE,
       status = "success",
       title = "Review and Correct Errors",
-      "Please review your critical errors (Step 2) and upload a revised dataset (Step 1).",
+      "Please review your critical issues and upload a revised dataset.",
       tags$br(),
       tags$br(),
       tags$p(actionLink("step4DownloadDetailModal", icon = icon("download"), "Download error detail CSV")),
       tags$br(),
       actionButton("backToStep2", "Return to Step 2", class = "btn-success")
-      
     )
   } else {
     # no critical errors ---------------------------

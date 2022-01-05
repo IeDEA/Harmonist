@@ -31,6 +31,8 @@ makeItPluralOrNot <- function(word, quantity){
   if (quantity == 1) return(word)
   if (endsWith(word, "y")){
     return(paste0(str_sub(word, start = 1, end = nchar(word) - 1), "ies"))
+  } else if (word == "does"){
+    return("do")
   }
   return(paste0(word, "s"))
 }

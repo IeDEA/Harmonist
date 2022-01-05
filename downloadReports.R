@@ -1,3 +1,72 @@
+createSrnSummary <- function(tableData, reportFormat){
+  if (!"supSRN" %in% names(tableData)) return(NULL)
+  if (nrow(tableData$supSRN) == 0) return(NULL)
+
+  # the baseline record should have a value for enrollment into SRN and birthdate
+  supSRN <- tableData$supSRN %>% 
+    filter(redcap_event_name == labelForBaselineArm1) %>% 
+    select(!!patientVarSym, !!rlang::sym(srnBirthDateVar), !!rlang::sym(srnEnrolDateVar)) %>% 
+    distinct(!!patientVarSym, .keep_all = TRUE)
+  
+  # if no baseline records in supSRN
+  if (nrow(supSRN) == 0) return(NULL)
+  
+  # if supSRN is in dataset, create a summary table of age distribution
+  # we know that srnBirthDateVar is required 
+  # date at SRN Enrollment is srnBirthDateVar compared to srnEnrolDateVar
+  supSRN$srnAge <- calcAge(supSRN[[srnBirthDateVar]], supSRN[[srnEnrolDateVar]])
+  supSRN$srnAgeGroup <- NA
+  srnAgeGroupLevels <- names(srnAgeGroups)
+  for (ageGroup in srnAgeGroupLevels){
+    supSRN[which((supSRN$srnAge >= srnAgeGroups[[ageGroup]]$lower) &
+                   (supSRN$srnAge < srnAgeGroups[[ageGroup]]$upper + 1) ),
+           "srnAgeGroup"] <- ageGroup
+  }
+
+  if (any(is.na(supSRN$srnAgeGroup))){
+    supSRN[which(is.na(supSRN$srnAgeGroup)),"srnAgeGroup"] <- "Unknown" 
+    srnAgeGroupLevels <- c(srnAgeGroupLevels, "Unknown")
+  }
+  
+  srnSummary <- supSRN %>%
+    mutate(srnAgeGroup = factor(srnAgeGroup, levels = srnAgeGroupLevels)) %>% 
+    complete(srnAgeGroup) %>% 
+    group_by(srnAgeGroup) %>% 
+    summarise(num = sum(!is.na(PATIENT))) %>% 
+    mutate(Patients = nrow(supSRN),
+           Records = nrow(tableData$supSRN)) %>% 
+    select(Records, Patients, everything()) %>% 
+    pivot_wider(names_from = srnAgeGroup, 
+                values_from = num)
+  
+  options(knitr.kable.NA = '')  
+  
+  if (reportFormat =="pdf"){ reportFormat <- "latex"}
+  
+  columnHeaderInfo <- c(2, length(srnAgeGroupLevels))
+  names(columnHeaderInfo) <- c(" ", 
+                               paste0("Age at ", "SRN", " Enrollment"))
+  
+  if (reportFormat == "html"){
+    srnSummaryKable <- kbl(srnSummary, format = "html", 
+                           caption = "Sentinal Research Network Summary") %>% 
+      kable_styling("bordered", full_width = FALSE, position = "left") %>% 
+      add_header_above(columnHeaderInfo)
+  }
+  else {
+    srnSummaryKable <- kbl(srnSummary, format = "latex", longtable = T, booktabs = T, 
+                             caption = "Sentinal Research Network Summary") %>% 
+      add_header_above(columnHeaderInfo)
+    #   caption = tableTitle, longtable = T, booktabs = T) %>% 
+    #  add_header_above(c(" " = 3, "Age at Enrollment" = length(ageGroupLabels))) #%>% 
+    # kable_styling(latex_options = c("repeat_header"))
+  }
+
+  return(srnSummaryKable)
+}
+
+
+
 createStatsSummary <- function(tableData, reportFormat){
   allVariablesInTables <- unlist(lapply(tableData,function(x){return(names(x))}), use.names = FALSE)
   variablesInReport <- intersect(names(toReport), allVariablesInTables)
@@ -500,6 +569,9 @@ generateDatasetSummary <- function(tableData, reportFormat){
   
   row <- 1
   for (tableName in c(indexTableName, tablesAndVariables$tablesToCheckWithPatientID)){
+    # srn table details will be compiled separately
+    if (tableName == "supSRN") next
+    
     numrecords <- nrow(tableData[[tableName]])
     tableWithValidPatients <- tableData[[tableName]] %>% filter(!!patientVarSym %in% validPatients)
     # first check to make sure this table has data
@@ -579,7 +651,8 @@ generateDatasetSummary <- function(tableData, reportFormat){
     #  add_header_above(c(" " = 3, "Age at Enrollment" = length(ageGroupLabels))) #%>% 
      # kable_styling(latex_options = c("repeat_header"))
   }
-
+  
+  srnSummaryKable <- createSrnSummary(tableData, reportFormat)
   statsSummaryTable <- createStatsSummary(tableData, reportFormat)
   visitStatsSummaryTable <- createVisitStats(tableData, reportFormat)
 #  otherStatsTable <- createOtherStats(tableData, reportFormat)
@@ -589,7 +662,8 @@ generateDatasetSummary <- function(tableData, reportFormat){
     totalPatients = totalPatients,
     tableSummaryKable = tableSummaryKable,
     statsSummaryTable = statsSummaryTable,
-    visitStatsSummaryTable = visitStatsSummaryTable#,
+    visitStatsSummaryTable = visitStatsSummaryTable,
+    srnSummaryKable = srnSummaryKable#,
     #otherStatsTable = otherStatsTable
   ))
 }
@@ -699,7 +773,7 @@ createReport <- function(file, reportType = c("PDF", "html"),
   
   errorSumTable <- generateErrorSummaryTables(errorTable()$errorOnlySummary, caption = "Summary of Errors", reportFormat = tolower(reportType))
   print("errorsum done")
-  
+
   warnSumTable <- generateErrorSummaryTables(errorTable()$warnOnlySummary, caption = "Summary of Warnings", reportFormat = tolower(reportType))
   badCodeSumTable <- generateErrorSummaryTables(errorTable()$badCodeSummary, caption = "Summary of Invalid Codes", reportFormat = tolower(reportType))
   errorSummaryTables <- list("errors" = errorSumTable,
@@ -760,8 +834,8 @@ createReport <- function(file, reportType = c("PDF", "html"),
   dir <- dirname(file)
   cat("createReport output directory: ", dir, "\n", sep = "", file = stderr())
   tempReport <- file.path(dir, tempReportName)
-  tempImage <- file.path(dir, "iedeaLogoSmall.png")
-  file.copy("iedeaLogoSmall.png", tempImage, overwrite = TRUE)
+  tempImage <- file.path(dir, "project_logo_50_20.png")
+  file.copy(file.path("projectFiles", "project_logo_50_20.png"), tempImage, overwrite = TRUE)
   file.copy(tempReportName, tempReport, overwrite = TRUE)
   knitr::knit_meta(class=NULL, clean = TRUE)
   rmarkdown::render(tempReport, output_file = file,
@@ -871,8 +945,8 @@ createReportOneProgram <- function(file, input, groupName){
   )
   tempReport <- file.path(tempdir(), filename)
 
-  tempImage2 <- file.path(tempdir(), "iedeaLogoSmall.png")
-  file.copy("iedeaLogoSmall.png", tempImage2, overwrite = TRUE)
+  tempImage2 <- file.path(tempdir(), "project_logo_50_20.png")
+  file.copy(file.path("projectFiles", "project_logo_50_20.png"), tempImage2, overwrite = TRUE)
   file.copy(filename, tempReport, overwrite = TRUE)
   knitr::knit_meta(class=NULL, clean = TRUE)
   rmarkdown::render(tempReport, output_file = file,
@@ -979,8 +1053,8 @@ createMetricsReport <- function(file) {
   dir <- dirname(file)
   cat("createDQReport output directory: ", dir, "\n", sep = "", file = stderr())
   tempReport <- file.path(dir, tempReportName)
-  tempImage <- file.path(dir, "iedeaLogoSmall.png")
-  file.copy("iedeaLogoSmall.png", tempImage, overwrite = TRUE)
+  tempImage <- file.path(dir, "project_logo_50_20.png")
+  file.copy(file.path("projectFiles", "project_logo_50_20.png"), tempImage, overwrite = TRUE)
   file.copy(tempReportName, tempReport, overwrite = TRUE)
   knitr::knit_meta(class=NULL, clean = TRUE)
   

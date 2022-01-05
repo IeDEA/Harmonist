@@ -255,6 +255,7 @@ observeEvent(input$uploadSummaryID,{
 getPreferredDataFormats <- function(concept){
   formatPrefs <- names(concept)[str_detect(names(concept), "dataformat_prefer")]
   requestedFormats <- c()
+  
   for (formatPref in formatPrefs){
     formatChosen <- concept[[formatPref]]
     if (is.null(formatChosen)) next
@@ -294,7 +295,7 @@ getContactDisplay <- function(contact, datacontactFlag = FALSE){
 
 # Show user details about the current data request
 dataRequestInfo <- reactive({
-  if (projectDef$hub_y == 0) return(NULL)
+  if (projectDef$hub_y != "1") return(NULL)
   if (!hubInfo$fromHub){
     # at this point this is specific to the IeDEA Hub
     box(
@@ -328,7 +329,8 @@ dataRequestInfo <- reactive({
       })
     )
     
-    requestedFormats <- getPreferredDataFormats(concept())
+    requestedFormats <- concept()$requestedFormats
+    
     box(
       width = 10,
       collapsible = TRUE,
@@ -446,6 +448,52 @@ output$uploadMissingSummary <- renderUI({
   )
 })
 
+output$uploadFileFormatError <- renderUI({
+  if (resetFileInput$reset) return(NULL)
+  if (!hubInfo$fromHub) return(NULL)
+  if (is.null(uploadList())) return(NULL)
+  if (is.null(uploadedTables())) return(NULL)
+  if (is_empty(uploadList()$nonmatchingFileFormats)) return(NULL)
+
+  nonmatchingFiles <- uploadList()$nonmatchingFileFormats
+  reqFormats <- concept()$requestedFormats
+  requestedmsg <- paste(sapply(reqFormats,function(i) as.character(tags$strong(i))), 
+                        paste0(".",concept()$requestedExtensions), sep = " (")
+  requestedmsg <- glue::glue_collapse(
+    paste0(requestedmsg, ")"), 
+    sep = ", ",
+    last = " and ")
+  
+  nonmatchingMessage <- 
+    tagList(
+      tags$p(tags$strong("The following",
+                 makeItPluralOrNot("file", length(nonmatchingFiles)),
+                 makeItPluralOrNot("does", length(nonmatchingFiles)),
+                 "not match the file format",
+                 "requested by", 
+                 paste0(userDetails()$uploadconcept_mr,":")
+             )),
+          makeBulletedList(nonmatchingFiles),
+      tags$p(userDetails()$uploadconcept_mr,
+             "requests", 
+             HTML(requestedmsg), 
+             "files.",
+             tags$em("Note that CSV files are always an acceptable option."))
+    )
+
+  fluidRow(
+    tags$a(id = "fileFormatBox"),
+    box(
+      width = 10,
+      solidHeader = TRUE,
+      status = "warning",
+      title = "File Format Error",
+      nonmatchingMessage
+    )
+  )
+})
+
+
 
 # uploadSummary UI --------------------------------------------------------
 output$uploadSummary <- renderUI({
@@ -458,7 +506,7 @@ output$uploadSummary <- renderUI({
   # if the uploaded dataset included deprecated variables, add explanatory line below table
 
     if (tablesAndVariables$details$deprecated_count > 0){
-      if (projectDef$datamodel_url_y == 1){
+      if (projectDef$datamodel_url_y == "1"){
         deprecatedMessage <- div(
           tags$em(
             tags$span("Note: Deprecated variables are shown in red. See", 
@@ -549,7 +597,7 @@ output$uploadSummary <- renderUI({
 output$selectFiles <- renderUI({
   if (is.null(hubInfo$fromHub)) return(NULL)
   
-  if (projectDef$datamodel_url_y == 1){
+  if (projectDef$datamodel_url_y == "1"){
     datamodelText <- tags$a(
       networkName, 
       projectDef$datamodel_name, 
@@ -590,7 +638,7 @@ output$selectFiles <- renderUI({
                      indexTableName,
                      " is required."),
               tags$p("Allowed file formats include ", 
-                     strong("CSV, SAS, Stata, SPSS, or a ZIP containing multiple files"), " of this type."),
+                     strong("CSV, SAS, Stata, SPSS, RDS, or a ZIP containing multiple files"), " of this type."),
               tags$p(tags$em("Select a single ZIP file or multiple files with Ctrl+Click"), align = "center"),
               fileInput("loaded",
                         "Data files", 

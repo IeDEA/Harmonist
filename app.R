@@ -1,7 +1,7 @@
 # app.R
 # 
 # The goals of this Shiny App are as follows:
-#   1. Read in files (zip, csv, SAS, SPSS, or Stata) containing tables adhering to the common data model 
+#   1. Read in files (zip, csv, SAS, SPSS, RDS, or Stata) containing tables adhering to the common data model 
 #   2. Check for presence of required variables and tables
 #   3. Conduct data quality checks
 #   4. Provide feedback on possible data quality errors, interactively and in downloadable form 
@@ -15,7 +15,14 @@
 #   Version 2 (including integration with Hub): March 2019
 #   Version 3: Generalized to other data models: May 2021
 #   Version 3.1: Added data quality checks for IeDEA Sentinal Research Network
+#   Version 3.2: Added logic to automatically retrieve latest version of JSON for data model, code list, and project info
 #   
+
+# check folder permissions for project files
+# NOTE: file.access is a pretty weird function and returns 0 for success
+if (any(file.access(c('projectFiles', file.path('www', 'projectFiles')), 2) != 0)) {
+  stop("can't write to projectFiles folders, please change permissions")
+}
 
 library(shiny)
 library(shinydashboard)
@@ -42,8 +49,6 @@ library(filesstrings)
 library(purrr)
 library(htmltools)
 library(data.table)
-
-options(shiny.minified = FALSE)
 
 # global variable to track size of uploaded files so that users can be warned when application busy
 usage <- list()
@@ -78,7 +83,7 @@ shinyUI <- dashboardPage(
   # custom header to include badge to indicate presence or absence of an active data request
   tags$header(
     span(
-      img(src=networkLogo), # filename stored in Harmonist0C, file must be in www directory
+      img(src="projectFiles/project_logo_100_40.png"), # filename stored in Harmonist0C, file must be in www directory
       span("Harmonist Data Toolkit",class="harmonist-title"),
       class = "harmonist-logo"
     ),
@@ -94,7 +99,7 @@ shinyUI <- dashboardPage(
                    uiOutput("warnOnQuit"),
                    tags$div(
                      id = "versionInfo",
-                     tags$p("Harmonist Data Toolkit Version 3.1"),
+                     tags$p("Harmonist Data Toolkit Version 3.2"),
                      tags$p(tags$a("Contact us", href="mailto:harmonist@vumc.org", target="_blank"))
                    )
   ),
@@ -113,6 +118,7 @@ shinyUI <- dashboardPage(
                 uiOutput("uploadIntro"),
                 uiOutput("dataRequestInfo"),
                 uiOutput("uploadMissingSummary"),
+                uiOutput("uploadFileFormatError"),
                 uiOutput("uploadSummary"),
                 uiOutput("selectFiles")
               )
@@ -299,7 +305,7 @@ shinyServer <- function(input, output, session){
   # getUserInfo ------------------------------------------------------
   # reactive variable to retrieve details about user if entered from the Hub, NULL otherwise
   getUserInfo <- reactive({
-    if (projectDef$hub_y == 0) return(NULL)
+    if (projectDef$hub_y != "1") return(NULL)
     query <- parseQueryString(session$clientData$url_search)
     encryptedToken <- query[["tokendt"]]
     if (is.null(encryptedToken)){
@@ -320,7 +326,7 @@ shinyServer <- function(input, output, session){
         return(NULL)
       }
 
-      if (is_empty(userInfo)) invalidToken <-  TRUE
+      if (userInfo == "" || is_empty(userInfo)) invalidToken <-  TRUE
       else {
         expiration <- userInfo$tokenexpiration_ts
         # if no expiration date in record OR if expiration date has passed, invalid token
@@ -408,7 +414,7 @@ shinyServer <- function(input, output, session){
   # *if* the user came from the Hub. Otherwise, no option to return to Hub
   backToHubMessage <- reactive({
     if (is.null(hubInfo$fromHub)) return(NULL)
-    if (projectDef$hub_y == 0) return(NULL)
+    if (projectDef$hub_y != "1") return(NULL)
     if (hubInfo$fromHub){
       
       hub_url <- paste0(plugin_url, "?token=",
@@ -486,13 +492,13 @@ shinyServer <- function(input, output, session){
     # if it's the first time data uploaded and user is from Hub, delete token
     if (hubInfo$fromHub && !recordDeleted()){
       if (hubInfo$userDetails$decryptedToken != "tokenjudy"){
-        result <- deleteOneRecord(tokenForHarmonist18, hubInfo$userDetails$decryptedToken)
-        if (inherits(result, "postFailure")) {
-          # record NOT deleted, so this means that someone could re-use the
-          # token later to possibly upload another dataset (this is okay)
-        } else {
-          recordDeleted(TRUE)
-        }
+       result <- deleteOneRecord(tokenForHarmonist18, hubInfo$userDetails$decryptedToken)
+       if (inherits(result, "postFailure")) {
+         # record NOT deleted, so this means that someone could re-use the
+         # token later to possibly upload another dataset (this is okay)
+       } else {
+         recordDeleted(TRUE)
+       }
       }
     }
     cat("Session:", isolate(sessionID()),"User selected files to upload at", 
@@ -576,7 +582,7 @@ shinyServer <- function(input, output, session){
                              size = 'l',
                              paste0("Your patients are currently grouped by ",
                              defGroupVar,
-                             "and are all in one group."),
+                             " and are all in one group."),
                              "To choose a different grouping option select the Change button below.",
                              footer = tagList(
                                actionButton("continueOneProg", "Continue"),
@@ -668,7 +674,7 @@ shinyServer <- function(input, output, session){
   
   #read in example concept description json. In the future: choose specific concept as determined by token in URL
   concept <- reactive({
-    if (projectDef$hub_y == 0) return(rjson::fromJSON(file = "concept0.json"))
+    if (projectDef$hub_y != "1") return(rjson::fromJSON(file = "concept0.json"))
     if (!hubInfo$fromHub) return(rjson::fromJSON(file = "concept0.json"))
     cat("Session:", isolate(sessionID())," user is from the Hub","\n", file = stderr())  
 
@@ -695,12 +701,33 @@ shinyServer <- function(input, output, session){
     # data downloaders are stored as a comma-delimited list in REDCap sop_downloaders
     downloaders <- as.list(strsplit(conceptInfo$sop_downloaders[[1]], ",")[[1]])
     conceptInfo$downloaders <- lapply(downloaders, function(x){getOneRecord(tokenForHarmonist5, x, projectName = "Harmonist 5")})
+    # consolidate requested file format info
+    formatPrefs <- names(conceptInfo)[str_detect(names(conceptInfo), "dataformat_prefer")]
+    requestedFormats <- c()
+    requestedExtensions <- c()
+    for (formatPref in formatPrefs){
+      formatChosen <- conceptInfo[[formatPref]]
+      if (is.null(formatChosen)) next
+      # formatChosen will be "1" if user selected that format
+      if (formatChosen == "1") {
+        index <- as.numeric(str_after_last(formatPref, "_"))
+        formatName <- fileFormats[[as.character(index)]] #fileFormats in definitions.R
+        formatExtension <- fileExtensions[[as.character(index)]] #fileExtensions in definitions.R
+        requestedFormats <- c(requestedFormats, formatName)
+        requestedExtensions <- c(requestedExtensions, formatExtension)
+      }
+    }
+    if (is.null(requestedFormats)) requestedFormats <- "None specified"
+    conceptInfo$requestedFormats <- requestedFormats
+    conceptInfo$requestedExtensions <- requestedExtensions
+    cat("Session:", isolate(sessionID()),
+        " preferred formats: ", requestedFormats, "\n", file = stderr())
     return(conceptInfo)
   }) 
   
   # request status badge in header, persists, indicates if user is responding to active data request
   output$requestStatus <- renderUI({
-    if (projectDef$hub_y == 0) return(NULL)
+    if (projectDef$hub_y != "1") return(NULL)
     if (is.null(hubInfo$userDetails)) return(NULL)
     
     if (hubInfo$fromHub){
@@ -727,7 +754,7 @@ shinyServer <- function(input, output, session){
     lastActivity(isolate(Sys.time()))
     if (useSampleData()){
       dir <- tempfile(pattern = 'dir')
-      zipPath <- file.path("www", "sampleTables.zip")
+      zipPath <- file.path("www", "projectFiles", "sample_dataset.zip")
       filenames <- unzip(zipPath, exdir = dir)
       result <- as.data.frame(t(sapply(filenames, function(filename) {
         list(name = basename(filename), size = file.size(filename), type = "", datapath = filename)
@@ -879,6 +906,17 @@ shinyServer <- function(input, output, session){
                       return(NULL)
                     })
     }
+    # read R rds files
+    else if (fileExt == "rds"){
+      myfile <- tryCatch(read_rds(inputLink[[index, 'datapath']]),
+                         error = function(e){
+                           fileReadError(extension = fileExt, 
+                                         fileName = inputLink$name[index],
+                                         errorMessage = e$message)
+                           resetFileInput$reset <- TRUE
+                           return(NULL)
+                         })
+    }
     else { # we should never reach this point...
       errorMessageModal(messageHeader = "Invalid File Type",
                         message = tagList(
@@ -936,8 +974,6 @@ shinyServer <- function(input, output, session){
       return(NULL)
     }
     
-    
-
     allfiles$tableName <- tolower(tolower(file_path_sans_ext(allfiles$name)))
     invalidFiles <- allfiles[which( (!allfiles$tableName %in% tolower(names(tableDef))) |
                                       nonDESTypes),]
@@ -970,7 +1006,7 @@ shinyServer <- function(input, output, session){
     }
    
     validFiles <- allfiles[which(!(allfiles$name %in% c(invalidFiles$name, emptyFiles))),]
-    
+
     # check to make sure that indexTableName is included in valid uploaded files
     if (!(indexTableNameLower %in% validFiles$tableName)){
       listOfFiles <- makeBulletedList(allfiles$name)
@@ -1004,6 +1040,13 @@ shinyServer <- function(input, output, session){
       }
     }
     
+    nonmatchingFileFormats <- c()
+    if (hubInfo$fromHub){
+      requestedFormats <- concept()$requestedFormats
+      requestedExtensions <- concept()$requestedExtensions
+      uploadedFormats <- validFiles$extension
+      nonmatchingFileFormats <- validFiles$name[which(!uploadedFormats %in% unique(c(requestedExtensions, "csv")))]
+    } 
     fileNames <- tolower(file_path_sans_ext(validFiles$name))
     tableNames <- fileNames[which(fileNames %in% tolower(names(tableDef)))]
     duplicateTableFlag <- any(duplicated(tableNames))
@@ -1051,10 +1094,11 @@ shinyServer <- function(input, output, session){
     tablesWithPatientID <- tablesWithPatientID[!(tablesWithPatientID==indexTableName)] #tables other than indexTableName with patientVar as ID
     
     uploadedFiles <- list(matchingTables, extraDESTables, extraNonDESTables, extraFiles,
-                          missingTables, allDESTables, tablesWithPatientID, tablesWithNoPatientID, emptyFiles)
+                          missingTables, allDESTables, tablesWithPatientID, tablesWithNoPatientID, emptyFiles,
+                          nonmatchingFileFormats)
     names(uploadedFiles) <- c("MatchingTables","ExtraDESTables", "ExtraTables", "ExtraFiles",
                               "MissingTables", "AllDESTables", "tablesWithPatientID", 
-                              "tablesWithNoPatientID", "emptyFiles")
+                              "tablesWithNoPatientID", "emptyFiles", "nonmatchingFileFormats")
     return(uploadedFiles)
   })
   
@@ -1161,7 +1205,8 @@ shinyServer <- function(input, output, session){
     # check to make sure indexTableName has records and inform user if error
     if (indexTableName %in% blankTables){
       errorMessageModal(messageHeader = paste0("No Records in ", indexTableName),
-                        message = paste0("Core table ", indexTableName, " is empty. This table is required and must have valid records."))
+                        message = paste0("Core table ", indexTableName, 
+                                         " is empty. This table is required and must have valid records."))
       resetFileInput$reset <- TRUE
       return(NULL)
     }

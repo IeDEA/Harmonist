@@ -1,11 +1,14 @@
 {
-  "BIRTH_DAT": 
-    {"table":"tblINDEX", 
-      "id": "PERSON_ID",
+  "BIRTH_D": 
+    {"table":"tblBAS", 
+      "id": "PATIENT",
       "sign":"before",
       "exceptions": [
-        "FATHERDEATH_DAT"
-	],
+        "FATHERDEATH_D",
+        "MUMART_SD",
+        "MUMART_ED",
+        "birth_d"
+        ],
       "specialExceptions":null
     }
 }

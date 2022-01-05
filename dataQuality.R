@@ -48,6 +48,7 @@ dataQualityChecks <- function(errorFrame, resources){
   temp <- updateModal("Checking for tables with no records", temp$num, temp$last)
   errorFrame <- blankTables(resources$finalGroupChoice, errorFrame, resources$tablesAndVariables$blankTables)
   
+  # add warning for deprecated variables
   temp <- updateModal("Checking for deprecated variables in dataset", 
                       temp$num, temp$last)
   errorFrame <- addDeprecatedWarning(errorFrame, resources)
@@ -88,6 +89,14 @@ dataQualityChecks <- function(errorFrame, resources){
     # add a warning if any codes have been marked as deprecated
     temp <- updateModal("Checking for deprecated codes", temp$num, temp$last)
     errorFrame <- checkForDeprecatedCodes(errorFrame, resources)
+    
+    if ("supSRN" %in% tablesAndVariables$tablesToCheck){
+      temp <- updateModal("Performing SRN checks", temp$num, temp$last)
+      errorFrame <- baselineCheckSRN(errorFrame, resources)
+      errorFrame <- srnSexCheck(errorFrame, resources)
+      errorFrame <- srnBirthDateCheck(errorFrame, resources) 
+    }
+
 
     
     # check for patients with less than 2 visit dates JUDY revisit
@@ -100,14 +109,21 @@ dataQualityChecks <- function(errorFrame, resources){
     #temp <- updateModal("Checking for supplemental field logic errors", temp$num, temp$last)
     # errorFrame <- checkSupplementalFields(errorFrame)
     
+    #################################################################################
+    ##### ADD CUSTOM DATA QUALITY CHECKS HERE #######################################
+    # source("customChecks.R", local = TRUE)
+    browser()
+    #################################################################################
+    
   }
   
-
-  
+  ###################################################################################
   # bind list of errors into one detailed data frame
+  
   updateModal("Aggregating errors and warnings")
     errorFrame <- data.table::rbindlist(errorFrame, use.names = TRUE, fill = TRUE)
-  cat("Session:", isolate(sessionID())," errorFrame binding complete\n", file = stderr())  
+  cat("Session:", isolate(sessionID())," errorFrame binding complete\n", file = stderr())
+  ###################################################################################
   
   if (!is_empty(errorFrame)){
     cat("Session:", isolate(sessionID())," there are errors","\n", file = stderr())  

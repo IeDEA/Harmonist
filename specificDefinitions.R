@@ -1,10 +1,10 @@
 # These variables will be unique to the research network
 
-AWS_bucket_name <- "" # change - should be in 0C?
+AWS_bucket_name <- "shiny-app-test" # change - should be in 0C?
 
 datesInFuture <- "NEXT_VISIT_D"
 dateIndicatingUnknown <- c("1911-11-11") 
-datesThatCanBeBefore1980 <- c("MOTHERDEATH_D", "FATHERDEATH_D", "DIS_D")
+datesThatCanBeBefore1980 <- c("MOTHERDEATH_D", "FATHERDEATH_D", "DIS_D", "birth_d") #birth_d is in supSRN
 minimumExpectedDate <- as.Date("1980-01-01")
 minimumExpectedBirthDate <- as.Date("1920-01-01")
 maxHeightDecreaseInM <- 0.25 # if height decreases by this amount over time, error
@@ -13,24 +13,33 @@ maxHeightDecreaseInM <- 0.25 # if height decreases by this amount over time, err
 # multiple measurements in one day is plausible
 duplicateRecordExceptions <- c("tblLAB_BP", "tblLAB_CD4") 
 
+#### SRN specific definitions
+# list supSRN variables that are flagged as required in REDCap but 
+# are required only at baseline
+# Column is required but not every missing value is an error
+requiredAtBaseline <- c("birth_d", "sex", "ic_dt") # these are in supSRN
+srnTableName <- "supSRN"
+redcap_event_codes <- tableDef[[srnTableName]]$variables$redcap_event_name$code_list_ref
+labelForBaselineArm1 <- codes[[redcap_event_codes]][[1]] # the first label in this code list should be the word Baseline
+srnBirthDateVar <- "birth_d"
+srnEnrolDateVar <- "ic_dt"
+
 
 # variables to allow in tables other than the prescribed table in iedeades, used in helpers.R
 approvedExtraVariables <- c("PROGRAM", "CENTER", "REGION")
 
 # the following explicit definitions should be moved to a json or REDCap
-# for IeDEA: desiredPlots <- c("ENROL_D", "VIS_D", "ART_SD", "CD4_D","RNA_D","DIS_D" )
-# for IeDEA: desiredTables <- c("tblBAS", "tblVIS", "tblART", "tblLAB_CD4", "tblLAB_RNA", "tblDIS")
-desiredPlots <- c() # date variables to include in report histograms
-desiredTables <- c() # corresponding table name for each of those variables
+desiredPlots <- c("ENROL_D", "VIS_D", "ART_SD", "CD4_D","RNA_D","DIS_D" )
+desiredTables <- c("tblBAS", "tblVIS", "tblART", "tblLAB_CD4", "tblLAB_RNA", "tblDIS")
 
 # IeDEA-specific, used to skip fields in check for codes that are missing or unknown -
 # should this rely instead on for dq checkbox in 0A?
-codesThatCanBeBlank <- c() 
+codesThatCanBeBlank <- c("ART_RS", "ART_RS2", "ART_RS3", "ART_RS4", "PREG_Y", "DEATH_Y","DROP_Y", "MOTHERDEATH_Y","FATHERDEATH_Y","RNA_T")
 
-trackNumberOfEntriesInVis <- c("HEIGHT","WEIGHT")
+trackNumberOfEntriesInVis <- c("WHO_STAGE","CDC_STAGE","HEIGH","WEIGH")
 
-interesting <- c() # list variables to include in heat map
-isFactor <- c("CENTER", "COUNTRY","PROVINCE", "DISTRICT", "CITY") 
+interesting <- c("SEX","NAIVE_Y","AIDS_Y","RECART_Y", "MODE", "MED_ID", "DEATH_Y", "CD4_V","LAB_V","RNA_V") # "WEIGH","HEIGH","WHO_STAGE","CDC_STAGE",
+isFactor <- c("CENTER", "COUNTRY","PROVINCE", "DISTRICT", "CITY") #maybe take out
 
 # for report
 visitStatsToReport <- c("Enrolled","Visits", "Deaths", "Transfers Out", "Viral Load","CD4")
@@ -42,8 +51,7 @@ codesIndicatingTransfer <- c(codes$'32'$`4`, codes$'32'$`4.1`) # this is the cod
 numYearsInReport <- 8 # include 8 most recent years
 minYearForVisitStats <- year(Sys.Date()) - numYearsInReport  
 
-pregnancyTables <- c() #these are tables to exclude from patient-linked dq checks
-# in IeDEA: ("tblPREG","tblNEWBORN","tblPREG_OUT","tblNEWBORN_ABNORM","tblDELIVERY_MUM","tblDELIVERY_CHILD")
+pregnancyTables <- c("tblPREG","tblNEWBORN","tblPREG_OUT","tblNEWBORN_ABNORM","tblDELIVERY_MUM","tblDELIVERY_CHILD")
 
 # date approximation logic -- IeDEA-specific
 datePairChecks <- jsonlite::read_json("dateApproximationLogic.json")
@@ -98,4 +106,19 @@ findLabTablesRequiringUnits <- function(tableDef){
 }
 
 labTablesRequiringUnits <- findLabTablesRequiringUnits(tableDef) 
+
+
+########################################################
+# SRN Enrollment Age Groups                            #
+########################################################
+# Set up age groups for enrollment in SRN 
+groupNames <- c("40-49", "50-59", "60-69", "70+")
+lower <- c(40, 50, 60, 70)
+upper <- c(49, 59, 69, 120)
+srnAgeGroups <- sapply(1:length(groupNames), function(i) {
+
+  group <- list()
+  group[[groupNames[[i]]]] <- list(lower = lower[[i]], upper = upper[[i]])
+  group
+})
 

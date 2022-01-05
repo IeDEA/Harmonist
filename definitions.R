@@ -16,58 +16,93 @@ maxNumberOfReportGroups <- 25 # used in determining alternate grouping variables
 notReadyMessage <- "Please complete Step 1 (upload files) and Step 2 (data quality checks)"
 
 ## read in info from Harmonist0C
-projectDef <- rjson::fromJSON(file = "Harmonist0C.json")
-if (length(projectDef) != 1) {
-  stop("projectDef should only have one record")
+jsonResult <- getREDCapJSON("0C", tokenForHarmonist11)
+forceRewriteFiles <- FALSE
+if (inherits(jsonResult, "postFailure") || is.null(jsonResult)) {
+  # use default file
+  projectDefFile <- getBackupJSONFile("0C")
+  warning("using backup Harmonist0C file: ", projectDefFile)
+} else {
+  projectDefFile <- jsonResult$filename
+  message("using Harmonist0C JSON file (version ", jsonResult$version, ") from REDCap")
+
+  forceRewriteFiles <- jsonResult$newVersion
+}
+projectDef <- rjson::fromJSON(file = projectDefFile)
+
+# larger project logo and sample dataset are in www directory but small logo is needed 
+# for reports so it is in main directory
+projectFiles <- list(
+  list(name = "project_logo_100_40", path = file.path("www", "projectFiles", "project_logo_100_40.png")),
+  list(name = "project_logo_50_20", path = file.path("projectFiles", "project_logo_50_20.png")),
+  list(name = "sample_dataset", path = file.path("www", "projectFiles", "sample_dataset.zip"))
+)
+
+for (projectFile in projectFiles) {
+  if (forceRewriteFiles || !file.exists(projectFile$path)) {
+    f <- file(projectFile$path, "wb")
+    writeBin(jsonlite::base64_dec(projectDef[[projectFile$name]]), f)
+    close(f)
+  }
 }
 
-projectDef <- projectDef[[1]]
-
 networkName <- projectDef$project_name
-networkLogo <- projectDef$project_logo_100_40
-
-# Set PATIENT variable name
-patientVar <- projectDef$patient_id_var
-patientVarSym <- rlang::sym(patientVar)
-
-# Set PROGRAM variable name
-defGroupVar <- projectDef$default_group_var
-defGroupVarSym <- rlang::sym(defGroupVar)
-defGroupTableName <- projectDef$group_tablename
 
 # Set tblBAS table name
 indexTableName <- projectDef$index_tablename
 indexTableNameLower <- tolower(indexTableName)
 indexTableSym <- rlang::sym(indexTableName)
 
-# Set BIRTH_D variable name
-birthDateVar <- projectDef$birthdate_var
+# Set patient variable name
+result <- splitVarName(projectDef$patient_id_var, expectedTableName = indexTableName)
+patientTableName <- result$tableName
+patientVar <- result$varName
+patientVarSym <- rlang::sym(patientVar)
+
+# Set default group variable name
+result <- splitVarName(projectDef$default_group_var, expectedTableName = indexTableName)
+defGroupTableName <- result$tableName
+defGroupVar <- result$varName
+defGroupVarSym <- rlang::sym(defGroupVar)
+defGroupTableName <- projectDef$group_tablename
+
+# Set birth date variable name
+result <- splitVarName(projectDef$birthdate_var, expectedTableName = indexTableName)
+birthDateTableName <- result$tableName
+birthDateVar <- result$varName
 birthDateVarSym <- rlang::sym(birthDateVar)
 
-# Set ENROL_D variable name
-ageDateVar <- projectDef$age_date_var
+# Set age date variable name
+result <- splitVarName(projectDef$age_date_var)
+ageDateTableName <- result$tableName
+ageDateVar <- result$varName
 ageDateVarSym <- rlang::sym(ageDateVar)
 
-# Set DEATH_D variable name
-deathDateVar <- projectDef$death_date_var
+# Set death date variable name
+result <- splitVarName(projectDef$death_date_var)
+deathDateTableName <- result$tableName
+deathDateVar <- result$varName
 deathDateVarSym <- rlang::sym(deathDateVar)
 
-# Set ENROL_D variable name
-enrolDateVar <- projectDef$enrol_date_var
+# Set enrollment date variable name
+result <- splitVarName(projectDef$enrol_date_var)
+enrolDateTableName <- result$tableName
+enrolDateVar <- result$varName
 enrolDateVarSym <- rlang::sym(enrolDateVar)
 
-# Set HEIGH variable name
-heightVar <- projectDef$height_var
-heightVarSym <- rlang::sym(heightVar)
-
+# Set height variable name
 heightTableName <- projectDef$height_table
 heightTableNameSym <- rlang::sym(heightTableName)
 
-heightDateVar <- projectDef$height_date
+result <- splitVarName(projectDef$height_var, expectedTableName = heightTableName)
+heightVar <- result$varName
+heightVarSym <- rlang::sym(heightVar)
+
+# Set height date variable name
+result <- splitVarName(projectDef$height_date, expectedTableName = heightTableName)
+heightDateVar <- result$varName
 heightDateVarSym <- rlang::sym(heightDateVar)
 
-# Set date suffix
-dateExt <- projectDef$date_ext
 
 # Set start date suffix (i.e. _SD)
 sdExt <- projectDef$sd_ext
@@ -76,28 +111,35 @@ sdExt <- projectDef$sd_ext
 edExt <- projectDef$ed_ext
 
 # does this network have date approximations?
-dateApproxFlag <- ifelse((projectDef$date_approx_y == 1) &&
+dateApproxFlag <- ifelse((projectDef$date_approx_y == "1") &&
                            (projectDef$date_approx != ""), TRUE, FALSE)
 
 # Setup age groups
-ageGroups <- sapply(1:6, function(i) {
-  lower <- as.integer(projectDef[[paste0("age_", i, "_lower")]])
-  upper <- as.integer(projectDef[[paste0("age_", i, "_upper")]])
-  groupName <-
-    if (upper == 120) {
-      if (lower > 18) {
-        paste0("Adults ", lower, "+")
+numAgeGroups <- as.integer(projectDef$n_age_groups)
+
+if (numAgeGroups > 0){
+  ageGroups <- sapply(1:numAgeGroups, function(i) {
+    lower <- as.integer(projectDef[[paste0("age_", i, "_lower")]])
+    upper <- as.integer(projectDef[[paste0("age_", i, "_upper")]])
+    groupName <-
+      if (upper == 120) {
+        if (lower > 18) {
+          paste0("Adults ", lower, "+")
+        } else {
+          paste0(lower, "+")
+        }
       } else {
-        paste0(lower, "+")
+        paste0(lower, "-", upper)
       }
-    } else {
-      paste0(lower, "-", upper)
-    }
-  
-  group <- list()
-  group[[groupName]] <- list(lower = lower, upper = upper)
-  group
-})
+    
+    group <- list()
+    group[[groupName]] <- list(lower = lower, upper = upper)
+    group
+  })
+} else {
+  ageGroups <- list()
+}
+
 
 
 # columns in error detail report:
@@ -229,12 +271,15 @@ globalDateAfterChecks <- rjson::fromJSON(file = "globalDateAfterChecks.json")
 dateOrders <- rjson::fromJSON(file = "withinTableDateOrder.json") # other than _ed/_sd
 
 # data uploading -- file types allowed
-validFileTypes <- c("csv", "sas7bdat", "dta", "sav")
-validFileTypesToDisplay <- "CSV, SAS, Stata, SPSS, or ZIP"
+validFileTypes <- c("csv", "sas7bdat", "dta", "sav", "rds")
+#validFileTypeNames <- tibble("CSV" = "csv", "SAS" = "sas7bdat", "Stata" = "dta", "SPSS" = "sav")
+validFileTypesToDisplay <- "CSV, SAS, Stata, SPSS, RDS, or ZIP"
 allowedExtraFileTypes <- c("doc", "docx", "xls", "xlsx", "ppt", "pptx", "jpg",
                            "jpeg","png", "gif", "txt", "pdf", "rtf",
                            "xml")
 
 # preferred file formats for IeDEA concepts in REDCap are named by number (dataformat_prefer):
-fileFormats <- list("1" = "CSV", "2" = "SAS", "3" = "Stata", "4" = "SPSS", "5" = "R", "9" = "Other")
-
+fileFormats <- list("1" = "CSV", "2" = "SAS", "3" = "Stata", 
+                    "4" = "SPSS", "5" = "RDS", "9" = "Other")
+fileExtensions <- list("1" = "csv", "2" = "sas7bdat", "3" = "dta", 
+                       "4" = "sav", "5" = "rds", "9" = "csv")

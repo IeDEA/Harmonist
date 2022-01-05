@@ -1,5 +1,52 @@
 {
-  "WEIGHT":
+  "GEOCODE_LAT": 
+  {"table":"tblCENTER",
+  "upper": 90,
+  "lower": -90,
+  "units": "degrees",
+  "unknown": null
+  },
+  "GEOCODE_LON": 
+  {"table":"tblCENTER",
+  "upper": 180,
+  "lower": -180,
+  "units": "degrees",
+   "unknown": null
+  },
+  "PREG_SEQ":
+  {
+    "table": "tblDELIVERY_MUM",
+    "upper": 20,
+    "lower": 1,
+    "units": "",
+    "unknown": null
+  },
+  "ROM_DUR":
+  {
+    "table": "tblDELIVERY_MUM",
+    "upper": 40,
+    "lower": 0,
+    "units":"hours",
+    "unknown": 999
+  },
+
+  "WEIGH":
+  {
+    "table": "tblVIS",
+    "upper": 180,
+    "lower": 0.5,
+    "units": "kg",
+    "unknown": 999
+  },
+  "HEIGH":
+  {
+    "table": "tblVIS",
+    "upper": 2.2,
+    "lower": 0.3,
+    "units": "m",
+    "unknown": 999
+  },
+    "WEIGHT":
   {
     "table": "tblVISIT",
     "upper": 180,

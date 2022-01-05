@@ -3,7 +3,7 @@ observeEvent(input$goToHelp,{
 })
 
 output$welcomeUI <- renderUI({
-  if (projectDef$hub_y == 1){
+  if (projectDef$hub_y == "1"){
     submitIntro <- paste0(" This option is available only if you entered the toolkit by selecting an active data request in the ",
     networkName,
     " Hub. You may explain remaining data quality errors or warnings and click to share your dataset with the investigator who created the data request.")
@@ -60,7 +60,7 @@ output$welcomeUI <- renderUI({
           width = 12,
           tagList(
             tags$p("Download this ",
-                   tags$a("Sample dataset ", href = "sampleTables.zip", target = "_blank"), 
+                   tags$a("Sample dataset ", href = "projectFiles/sample_dataset.zip", target = "_blank"), 
                    " to test the Toolkit and learn about its functions. ",
                    "View the ", 
                    tags$a("IeDEA Harmonist Data Toolkit Video ", 

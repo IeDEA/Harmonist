@@ -119,7 +119,7 @@ uploadREDCapFile <- function(filename, projectToken, record_id, name_of_field) {
 }
 
 # Get a JSON file from REDCap from a Harmonist 11 database
-getREDCapJSON <- function(type = c('0A', '0B'), projectToken, version = NULL) {
+getREDCapJSON <- function(type = c('0A', '0B', '0C'), projectToken, version = NULL) {
   type <- match.arg(type)
 
   filterLogic <- paste0('[type] = "', tolower(type), '"')
@@ -152,36 +152,51 @@ getREDCapJSON <- function(type = c('0A', '0B'), projectToken, version = NULL) {
     return(NULL)
   }
 
+  newVersion <- FALSE
   #filename <- tempfile(paste0('Harmonist', type, '_'), fileext = '.json')
-  if (!dir.exists('json')) {
-    dir.create('json')
-  }
-  filename <- file.path('json', paste0('Harmonist', type, '_', record$version, '.json'))
+  filename <- file.path('projectFiles', paste0('Harmonist', type, '_', record$version, '.json'))
   if (!file.exists(filename)) {
+    newVersion <- TRUE
     result <- downloadREDCapFile(filename, projectToken, record$record_id, 'jsoncopy_file')
     if (inherits(result, 'postFailure')) {
       return(result)
     }
   }
-  result <- list(filename = filename, version = record$version)
+  result <- list(filename = filename, version = record$version, newVersion = newVersion)
   return(result)
 }
 
-# look for latest version of JSON file in the 'json' directory, or return the
+# look for latest version of JSON file in the 'projectFiles' directory, or return the
 # repository version if all else fails
-getBackupJSONFile <- function(type = c('0A', '0B')) {
+getBackupJSONFile <- function(type = c('0A', '0B', '0C')) {
   type <- match.arg(type)
 
   result <- c()
-  if (dir.exists('json')) {
-    files <- list.files('json', paste0("Harmonist", type, "_\\d+.json"))
-    if (length(files) > 0) {
-      result <- file.path('json', files[order(as.integer(sub("^.+?(\\d+).+?$", "\\1", files)), decreasing=TRUE)[1]])
-    }
+  files <- list.files('projectFiles', paste0("Harmonist", type, "_\\d+.json"))
+  if (length(files) > 0) {
+    result <- file.path('projectFiles', files[order(as.integer(sub("^.+?(\\d+).+?$", "\\1", files)), decreasing=TRUE)[1]])
   }
 
   if (length(result) == 0) {
     result <- paste0('Harmonist', type, '.json')
   }
   return(result)
+}
+
+# Split table and variable names (i.e. tblBAS:PATIENT) and optionally verify
+# expected table name
+splitVarName <- function(inputVarName, expectedTableName = NULL) {
+  parts <- strsplit(inputVarName, ":")[[1]]
+  if (length(parts) != 2) {
+    stop("invalid input variable name: ", inputVarName)
+  }
+  tableName <- parts[1]
+  varName <- parts[2]
+  if (!is.null(expectedTableName) && tableName != expectedTableName) {
+    arg1 <- substitute(inputVarName)
+    arg2 <- substitute(expectedTableName)
+    stop("expected table name for ", arg1, " (", inputVarName, ") to be ",
+         arg2, " (", expectedTableName, ") but got ", tableName)
+  }
+  list(tableName = tableName, varName = varName)
 }

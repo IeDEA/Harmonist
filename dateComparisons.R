@@ -69,24 +69,34 @@ globalDateChecksBefore <- function(errorFrame, resources){
   # dateApproxFlag (set in definitions.R, is TRUE if this network has a date approximation 
   # variable that can accompany date variables
   if (dateApproxFlag){
-    dateRelatedExtensions <- c(dateExt, projectDef$date_approx)
-  } else {
-    dateRelatedExtensions <- dateExt
-  }
+    dateApproxExt <- projectDef$date_approx
+  } 
   
   # find *before* global date fields present in dataset, store in checkTheseGlobalDates
   globalChecks <- globalDateBeforeChecks
   checkTheseGlobalDates <- intersect(names(globalChecks), 
                                      unlist(resources$tablesAndVariables$matchingColumns, use.names = FALSE))
+  
   for (globalDateName in checkTheseGlobalDates){
     print(globalDateName)
     # read in details about this global date field, such as table name, exceptions
     dateCheck <- get(globalDateName, globalChecks)
+    dateVarsInMain <- intersect(names(resources$formattedTables[[dateCheck$table]]),
+                                findVariablesMatchingCondition(dateCheck$table, tableDef, "data_format", "YYYY-MM-DD"))
+    if (dateApproxFlag){
+      possibleDateApproxVars <- paste0(dateVarsInMain, dateApproxExt)
+      dateApproxVars <- intersect(names(resources$formattedTables[[dateCheck$table]]),
+                            possibleDateApproxVars)
+      allDateRelatedVars <- c(dateVarsInMain, dateApproxVars)
+    } else {
+      allDateRelatedVars <- dateVarsInMain
+    }
     
     globalDate <- resources$formattedTables[[dateCheck$table]] %>% 
       filter(!!rlang::sym(globalDateName) != dateIndicatingUnknown) %>%  
       filter(!is.na(!!rlang::sym(globalDateName))) %>% 
-      select(!!patientVarSym, ends_with(dateRelatedExtensions), 
+      select(!!patientVarSym, 
+             any_of(allDateRelatedVars),
              recordIndex1=recordIndex)
     
     # iterate through all uploadedTables that have patientVar as primary ID
@@ -171,11 +181,8 @@ globalDateChecksAfter <- function(errorFrame, resources){
   # dateApproxFlag (set in definitions.R, is TRUE if this network has a date approximation 
   # variable that can accompany date variables
   if (dateApproxFlag){
-    dateRelatedExtensions <- c(dateExt, projectDef$date_approx)
-  } else {
-    dateRelatedExtensions <- dateExt
-  }
-  
+    dateApproxExt <- projectDef$date_approx
+  } 
   # find *after* global date fields present in dataset, store in checkTheseGlobalDates
   globalChecks <- globalDateAfterChecks
   checkTheseGlobalDates <- intersect(names(globalChecks),
@@ -184,10 +191,22 @@ globalDateChecksAfter <- function(errorFrame, resources){
     print(globalDateName)
     # read in details about this global date field, such as table name, exceptions
     dateCheck <- get(globalDateName, globalChecks)
+    dateVarsInMain <- intersect(names(resources$formattedTables[[dateCheck$table]]),
+                                findVariablesMatchingCondition(dateCheck$table, tableDef, "data_format", "YYYY-MM-DD"))
+    if (dateApproxFlag){
+      possibleDateApproxVars <- paste0(dateVarsInMain, dateApproxExt)
+      dateApproxVars <- intersect(names(resources$formattedTables[[dateCheck$table]]),
+                                  possibleDateApproxVars)
+      allDateRelatedVars <- c(dateVarsInMain, dateApproxVars)
+    } else {
+      allDateRelatedVars <- dateVarsInMain
+    }
+    
     globalDate <- resources$formattedTables[[dateCheck$table]] %>% 
       filter(!!rlang::sym(globalDateName) != dateIndicatingUnknown) %>%  
       filter(!is.na(!!rlang::sym(globalDateName))) %>% 
-      select(!!patientVarSym, ends_with(dateRelatedExtensions), 
+      select(!!patientVarSym,
+             any_of(allDateRelatedVars),
              recordIndex2=recordIndex)
     # REVISIT THIS browser()
     # iterate through all uploadedTables that have patientVar as ID

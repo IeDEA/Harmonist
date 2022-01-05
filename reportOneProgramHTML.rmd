@@ -42,7 +42,7 @@ if (!(params$datasetDesc=="")){
 
 ```
 
-## `r knitr::include_graphics("iedeaLogoSmall.png")` Harmonist Data Toolkit Report for `r groupVar` `r program`
+## `r knitr::include_graphics("project_logo_50_20.png")` Harmonist Data Toolkit Report for `r groupVar` `r program`
 
 `r headerMessage` `r regionMessage`
 
@@ -62,12 +62,17 @@ knitr::opts_chunk$set(
 Total number of patients from `r groupVar` `r program` in dataset: `r params$datasetSummary$totalPatients`
 ```{r summary2, echo=FALSE, fig.align='left', message=FALSE, warning=FALSE, results='asis'}
 cat(params$datasetSummary$tableSummaryKable)
+
+if (!is.null(params$datasetSummary$srnSummaryKable)){
+   cat(params$datasetSummary$srnSummaryKable)
+}
 ```
 
 ```{r summarytable, echo=FALSE, fig.align='left', message=FALSE, warning=FALSE, results='asis'}
 if (params$includeDataSummary){
   if (!is.null(params$datasetSummary$statsSummaryTable)){
-    cat("### Summary statistics from uploaded tables", groupVar, program)
+    cat("### Summary statistics for ", groupVar, program)
+    cat("\n")
     cat(params$datasetSummary$statsSummaryTable)
     cat(params$datasetSummary$visitStatsSummaryTable)
   }
