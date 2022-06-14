@@ -49,6 +49,7 @@ library(filesstrings)
 library(purrr)
 library(htmltools)
 library(data.table)
+library(REDCapR)
 
 # global variable to track size of uploaded files so that users can be warned when application busy
 usage <- list()
@@ -63,7 +64,7 @@ source("definitions.R", local = TRUE)
 # specificDefinitions should be edited to match current research network specs
 source("specificDefinitions.R", local = TRUE)
 
-#source("otherVisitStats.R", local = TRUE) add when ready to add more report features
+# source("otherVisitStats.R", local = TRUE) add when ready to add more report features
 
 # html for appBusy announcement
 busyAnnounce <- read_file("busyAnnounce.html")
@@ -76,6 +77,14 @@ busyAnnounce <- read_file("busyAnnounce.html")
 # appBusy will be TRUE when the application not responsive due to calculations
 appBusy <- FALSE
 
+fields <- c("version_num")
+    changelogVersion <- redcap_read_oneshot(redcap_uri = redcap_url,
+                                token = tokenForHarmonistChangelog,
+                                fields = fields)$data
+    sorted_versions <- sort(changelogVersion$version_num, decreasing = TRUE)
+    current_version <- toString(sorted_versions[1])
+    versionLinkText <- paste("Harmonist Data Toolkit Version ", current_version)
+    
 shinyUI <- dashboardPage(
 
   title = paste0(networkName," Harmonist Data Toolkit"),
@@ -99,7 +108,7 @@ shinyUI <- dashboardPage(
                    uiOutput("warnOnQuit"),
                    tags$div(
                      id = "versionInfo",
-                     tags$p("Harmonist Data Toolkit Version 3.2"),
+                     tags$p(actionLink('changelogLink', versionLinkText)),
                      tags$p(tags$a("Contact us", href="mailto:harmonist@vumc.org", target="_blank"))
                    )
   ),
@@ -149,6 +158,9 @@ shinyUI <- dashboardPage(
               ),
       tabItem(tabName = "feedback",
               uiOutput("feedbackTabUI")
+              ),
+      tabItem(tabName = "changelog",
+              uiOutput("changelogTabUI")
               )
     ),
     tags$head(
@@ -182,6 +194,7 @@ shinyServer <- function(input, output, session){
   source("helpTab.R", local = TRUE)
   source("feedbackTab.R", local = TRUE)
   source("exitTab.R", local = TRUE)
+  source("changelogTab.R", local = TRUE)
   
   source("REDCapHelpers.R", local = TRUE)
   source("modalFunctions.R", local = TRUE)
@@ -194,8 +207,6 @@ shinyServer <- function(input, output, session){
   
   #### IeDEA-specific data checks #####
   source("iedeaDataChecks.R", local = TRUE)
- # source("customChecks.R", local = TRUE) for future generalized version
-
   
   # code for report generation ---------------------------------------
   source("downloadReports.R", local = TRUE)
@@ -270,7 +281,7 @@ shinyServer <- function(input, output, session){
   #logic to terminate application execution if idle
   observe({
     # Re-execute this reactive expression after 10 minutes (600,000 milliseconds).
-    # This expression could also be re-executed when the lastActivity value changes, so it needs to be checked. 
+    # This expression could also be re-executed when the lastActivity value changes, so it needs to be checked.
     if (is.null(infile())) return()
     cat("Session:", isolate(sessionID()),"is active", 
         as.character(now()), "\n", sep = " ", file = stderr())
@@ -356,6 +367,8 @@ shinyServer <- function(input, output, session){
   observeEvent(session$token,{
     print(paste("session =", session$token, "usage = ", sum(unlist(usage))))
     postProgress(list(action_step = "start"))
+
+    hideTab(inputId = "changelog", target = "Changelog")
     
     # if a user is testing the toolkit, no need to add progress to Harmonist 17
     query <- parseQueryString(session$clientData$url_search)
@@ -514,7 +527,7 @@ shinyServer <- function(input, output, session){
   # If user clicks button on Upload tab labeled "Continue to Step 2" change active tab to Step 2: Check data
   # and initiate data quality checks with startDQ TRUE. 
   observeEvent(input$step2,{
-    if (is.null(startDQ()) &&
+    if (is.null(startDQ()) && 
         groupByChoice() == defGroupVar && 
         groupByInfo()$numPrograms == 1 &&
         !is.null(groupByInfo()$otherGroupOptions)){
@@ -1522,7 +1535,8 @@ shinyServer <- function(input, output, session){
       menuItem("Visualize data", 
                tabName = "interactivePlots", icon = icon("bar-chart")),
       menuItem("Help", tabName = "help", icon = icon("question-circle")),
-      menuItem("Provide feedback", tabName = "feedback", icon = icon("envelope"))
+      menuItem("Provide feedback", tabName = "feedback", icon = icon("envelope")),
+      menuItem("", tabName = "changelog")
     )
   })
   
