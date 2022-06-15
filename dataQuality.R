@@ -112,7 +112,7 @@ dataQualityChecks <- function(errorFrame, resources){
     #################################################################################
     ##### ADD CUSTOM DATA QUALITY CHECKS HERE #######################################
     # source("customChecks.R", local = TRUE)
-    browser()
+    # 
     #################################################################################
     
   }

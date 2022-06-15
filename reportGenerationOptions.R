@@ -154,9 +154,11 @@ output$histOptions<- renderUI({
   }
 })
 
+
+# FIX ME: At some point add option to include multiple specific groups in one report
 # observeEvent(input$multContinue,{
 #   if (is.null(input$multGroupsInReport))
-#     browser()
+#    
 #   removeModal()
 # })
 

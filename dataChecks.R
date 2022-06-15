@@ -1,19 +1,46 @@
 findIt <- function(df, varName, indexTable){
   if (exists(varName, df)) {
     result <- df[[varName]]
-    blankGroup <- safeTrimWS(result) == ""
-    result[which(blankGroup)] <- NA
-    result <- replace_na(result, "Unknown")
+
+    # if it's already a factor, unknowns have been handled
+    if (is.factor(result)) return(result)
+
+    # if any patients weren't in the indexTable, replace with Unknown
+    if (any(is.na(result))){
+      result <- replace_na(result, "Unknown")
+    }
+
+    # If any groupVars were missing in the indexTable, replace with Unknown
+    if (any(safeTrimWS(result) == "")){
+      blankGroup <- safeTrimWS(result) == ""
+      result[which(blankGroup)] <- NA
+      result <- replace_na(result, "Unknown")
+    }
     return(result)
   }
+  # if the grouping variable is not in the dataset, see if the patient variable is
+  # and find the grouping variable by linking to indexTable
   if (exists(patientVar, df)){
     result <- indexTable[match(df[[patientVar]], indexTable[[patientVar]]), varName]
-    blankGroup <- safeTrimWS(result) == ""
-    result[which(blankGroup)] <- NA
-    result <- replace_na(result, "Unknown")
-    return(result)
+
+    # if it's already a factor, unknowns have been handled
+    if (is.factor(result)) return(result)
+
+    # if any patients weren't in the indexTable, replace with Unknown
+    if (any(is.na(result))){
+      result <- replace_na(result, "Unknown")
+    }
+
+    # If any groupVars were missing in the indexTable, replace with Unknown
+    if (any(safeTrimWS(result) == "")){
+      blankGroup <- safeTrimWS(result) == ""
+      result[which(blankGroup)] <- NA
+      result <- replace_na(result, "Unknown")
+    }
   }
-  else result <- "Unknown"
+  else {
+    result <- "Unknown"
+  }
   return(result)
 }
 
@@ -93,7 +120,8 @@ addToErrorFrame <- function(indexTable, groupVar, errorFrame, table, field, tabl
   for (i in 1:length(idList)){
     idColumns <- c(idColumns, idFieldNames[[i]], idValueNames[[i]]) # idFieldNames, idValueNames in definitions.R
   }
-  groupColumns <- ifelse(groupVar == defGroupVar, defGroupVar, c(defGroupVar, groupVar))
+  
+  groupColumns <- unique(c(defGroupVar, groupVar))
   
   columnNames <- c(groupColumns, "table", idColumns, minimumErrorDetail, names(list(...))) #minimumErrorDetail in definitions.R
   numErrorRows <- nrow(table)
@@ -675,11 +703,19 @@ duplicateRecordChecks <- function(errorFrame, resources){
   for (tableName in resources$tablesAndVariables$tablesToCheck[!(resources$tablesAndVariables$tablesToCheck %in% duplicateRecordExceptions)]){
     print(paste0("checking for duplicates in ", tableName))
     idFields <- tableIDField[[tableName]]
-    table <- as_tibble(resources$uploadedTables[[tableName]][, idFields])
+    # if there is only one identifier in this table, doesn't work to use [, idFields] and keep
+    # name of column. If more than one, works fine
+    if (length(idFields) == 1){
+      table <- tibble(resources$uploadedTables[[tableName]][idFields])
+    } else {
+      table <- tibble(resources$uploadedTables[[tableName]][, idFields])
+    }
+    
     if (uniqueN(table) == nrow(table)){
       # this means there are no duplicate combinations of key identifiers
       next
     }
+
     print(paste0("before dupRows", Sys.time()))
     # quantity = the number of rows that are DUPLICATES of a previous row - 
     # subtract the original row from the count
@@ -710,6 +746,7 @@ duplicateRecordChecks <- function(errorFrame, resources){
     }
     
     print("about to add duplicates to error frame")
+
     errorFrame <- addToErrorFrame(resources$formattedTables[[indexTableName]],
                                   resources$finalGroupChoice, errorFrame, 
                                   duplicates, 

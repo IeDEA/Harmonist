@@ -49,7 +49,7 @@ addAgeGroupAndGroup <- function(formattedTableData, groupByVar){
     currentTable <- formattedTableData[[tableName]]
     toJoinFromTable <- names(currentTable)
     # no need to add defGroupVar or groupByVar from indexTableName if already in table
-    #if (groupByVar %in% names(formattedTableData[[tableName]])) browser() # what if a table has a different group value
+    # if (groupByVar %in% names(formattedTableData[[tableName]])) FIXME # what if a table has a different group value
     toJoinFromIndex <- c(patientVar, setdiff(c(defGroupVar, groupByVar), toJoinFromTable), "ageGroup")
     gc()
     formattedTableData[[tableName]] <- left_join(currentTable[,toJoinFromTable, drop = FALSE], 
@@ -291,7 +291,7 @@ forceModeTables <- function(groupByVar, uploadedTables){
   for (tableName in tablesAndVariables$tablesToCheck){
     DESVariableNames <- intersect(names(tableDef[[tableName]][["variables"]]),
                                   names(formattedTables[[tableName]]))
-    formattedTables[[tableName]] <- select(formattedTables[[tableName]],DESVariableNames, everything())
+    formattedTables[[tableName]] <- select(formattedTables[[tableName]], all_of(DESVariableNames), everything())
   }
   #Add index column to keep link between records in uploadedTables and formattedTables
   formattedTables <- lapply(formattedTables, function(x){

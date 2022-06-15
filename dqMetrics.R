@@ -407,9 +407,18 @@ summarizeDQMetrics <- function(errorFrame, tableRowsByGroup, formattedTables, gr
         
         varDQ <- completeness
         # Completeness finished -----------------------------------------------------------
-   
+
+        # to exclude _RS2 _RS3 _RS4 (additional reasons) for now
+        additionalReasonFlag <- FALSE
+        if (str_detect(varName, "_RS")){
+          lastChar <- str_sub(varName, start = -1)
+          if (!is.na(as.numeric(lastChar))) additionalReasonFlag <- TRUE
+        }
+
+        # include in coded heatmap coded vars except date approx and additional 
+        # reason fields
         if (codedVar && !endsWith(varName, "D_A") 
-            && length(str_split(varName, "_RS")[[1]]) < 2){ # this excludes _RS2 _RS3 _RS4 for now
+            && !additionalReasonFlag){ 
           if (is.null(rowsToUse)){
             checkCodeRows <- nonBlankRows
           } else {
@@ -519,7 +528,7 @@ summarizeDQMetrics <- function(errorFrame, tableRowsByGroup, formattedTables, gr
       heatmapVars <- c("Logic_percent", "DES_percent",
                        "Complete_percent")
 
-      forHeatmap <- gather(varDQ, heatmapVars,
+      forHeatmap <- gather(varDQ, all_of(heatmapVars),
                            key = "Metric", value = "percent")
       
       heatmapData[[tableName]][[varName]] <- forHeatmap

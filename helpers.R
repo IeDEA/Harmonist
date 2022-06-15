@@ -344,3 +344,51 @@ wrap_sentence <- function(string, width) {
 # usage: df$title_var <- sapply(df$var, titleReady)
 titleReady <- function(x) paste(str_to_title(unlist(strsplit(x,"[.]"))),collapse=" ")
 
+# find outliers in data visualization tab
+grubbs.outliers <- function(data, threshold=0.1, cutoff=10)
+{
+  orig <- as.numeric(data)
+  names(data) <- 1:length(data)
+  data <- sort(data)
+  good <- as.numeric(names(data))
+  fail <- NULL
+  test <- NULL
+  cont <- TRUE
+  
+  # Strip lowest outliers
+  while(cont && length(good) > cutoff)
+  {
+    test <- grubbs.test(orig[good])
+    if(test$p.value >= threshold) {cont <- FALSE; next}
+    if(grepl("lowest", test$alternative))
+    {
+      fail <- if(is.null(fail)) good[1] else c(fail, good[1])
+      good <- good[2:length(good)]
+    } else {
+      fail <- if(is.null(fail)) good[length(good)] else c(fail, good[length(good)])
+      good <- good[1:(length(good)-1),]
+    }
+  }     
+  fail
+}
+
+IQR.outliers <- function(datavector)
+{
+  dataiqr <- IQR(datavector, na.rm = TRUE, type = 2)
+  datamedian <- median(datavector, na.rm = TRUE)
+  lowerlimit <- datamedian - 1.5 * dataiqr
+  upperlimit <- datamedian + 1.5 * dataiqr
+  data_no_outlier <- subset(datavector, datavector > lowerlimit & datavector < upperlimit)
+  return (data_no_outlier)
+}
+
+IQR.outliers.second <- function(dataframe)
+{
+  double <- unlist(dataframe[1])
+  dataiqr <- IQR(double, na.rm = TRUE, type = 2)
+  datamedian <- median(double, na.rm = TRUE)
+  lowerlimit <- datamedian - 1.5 * dataiqr
+  upperlimit <- datamedian + 1.5 * dataiqr
+  data_no_outlier <- subset(dataframe, dataframe[1] > lowerlimit & dataframe[1] < upperlimit)
+  return (data_no_outlier)
+}

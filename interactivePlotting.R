@@ -1,14 +1,14 @@
 output$plotUI <- renderUI({
- 
-    if (resetFileInput$reset) {
-      return(fluidPage(fluidRow(tags$h3(class = "row_text title", notReadyMessage))))
-    }
+
+  if (resetFileInput$reset) {
+    return(fluidPage(fluidRow(tags$h3(class = "row_text title", notReadyMessage))))
+  }
   if (is.null(errorTable())){
     return(fluidPage(fluidRow(tags$h3(class = "row_text title", notReadyMessage))))
   } 
-    if (is.null(errorTable()[[1]])){
-      return(fluidPage(fluidRow(tags$h3(class = "row_text title", notReadyMessage))))
-    } 
+  if (is.null(errorTable()[[1]])){
+    return(fluidPage(fluidRow(tags$h3(class = "row_text title", notReadyMessage))))
+  }
   fluidPage(
     tags$h3(class = "row_text title",
             "Visualize data", backToHubMessage()),
@@ -17,6 +17,13 @@ output$plotUI <- renderUI({
     fluidRow(column(3,uiOutput("chooseTable")),
              column(2,uiOutput("selectVar1") ),
              column(3,uiOutput("selectVar2") )),
+    
+    div(
+      checkboxInput("removeOutliers", "Remove Outliers", value = FALSE),
+      style = "margin: 0 0 0 20px;"
+    ),
+
+    fluidRow(style = "margin: 0 0 5px 2px;", uiOutput("outlierMsg")),
     
     fluidRow(column(3,uiOutput("plotit"))),
     fluidRow(
@@ -27,9 +34,9 @@ output$plotUI <- renderUI({
 
 # interactive plot exploration code -----------------------------------------------------   
 output$chooseTable <- renderUI({
- 
-    return(selectInput("table2plot", "Select a table to investigate interactively", 
-                       choices = tablesAndVariables$tablesToCheck))
+  
+  return(selectInput("table2plot", "Select a table to investigate interactively", 
+                     choices = tablesAndVariables$tablesToCheck))
   
 })
 
@@ -44,7 +51,7 @@ output$selectVar1 <- renderUI({
     return(selectInput("var1", "Select a variable to plot", choices = choices1))
   }
 })
-    
+
 
 observeEvent(input$var1,{
   output$selectVar2 <- renderUI({
@@ -88,41 +95,55 @@ p <- eventReactive(input$plotButton,{
   lastActivity(Sys.time())
   
   trackDetailsForREDCap$plots <- rbind(trackDetailsForREDCap$plots,
-                                  data.frame( 
-                                    action_step = "createplot",
-                                    action_ts = Sys.time(),
-                                    plot_table = input$table2plot,
-                                    plot_var1 = input$var1,
-                                    plot_var2 = input$var2,
-                                    stringsAsFactors = FALSE))
+                                       data.frame( 
+                                         action_step = "createplot",
+                                         action_ts = Sys.time(),
+                                         plot_table = input$table2plot,
+                                         plot_var1 = input$var1,
+                                         plot_var2 = input$var2,
+                                         stringsAsFactors = FALSE))
   dataset <- formattedTables()[[input$table2plot]]
   
   plotOptions <- theme(axis.title.x = element_text(margin = margin(t = -10))) +
     theme(axis.text.x = element_text(angle = xAxisLabelAngle)) 
- 
+  
   # if first variable is discrete plot a bar chart 
   if (is.factor(get(input$var1, dataset)) || 
       is.character(get(input$var1, dataset)) ||
       is.integer(get(input$var1, dataset))){
+    
+    shinyjs::hide(id = "removeOutliers")
+    
     if (input$var2 == "None"){
       p <- ggplot(dataset,
                   aes_string(input$var1)) + 
         geom_bar(fill = "blue") + theme(legend.position = "none") + 
         plotOptions 
+      
+      outlier_message <- ""
+      output$outlierMsg <- renderUI({ 
+        outlier_message
+      })
     }
     else {
       p <- ggplot(dataset,
                   aes_string(input$var1, fill= input$var2)) + 
         geom_bar() +
-       # scale_fill_manual(values = getPalette ) +
-      # scale_fill_viridis_d(na.value = "gray50") +
-        scale_fill_brewer(palette = "Paired", na.value = "gray50")
-      
+        # scale_fill_manual(values = getPalette ) +
+        # scale_fill_viridis_d(na.value = "gray50") +
+        scale_fill_brewer(palette = "Paired", na.value = "gray50") +
+        
         plotOptions
+      
+      outlier_message <- ""
+      output$outlierMsg <- renderUI({ 
+        outlier_message
+      })
     }
   }
   else{ #if first variable is continuous plot a histogram
     # if var1 is a lab value (_V) see if var2 is units for that lab
+    shinyjs::show(id = "removeOutliers")
     labWithUnits <- FALSE
     if (endsWith(input$var1, "_V")){
       labName <- strsplit(input$var1,"_V")[[1]]
@@ -135,25 +156,97 @@ p <- eventReactive(input$plotButton,{
     if (labWithUnits){
       datasetToPlot <- dataset %>% filter(!!rlang::sym(unitsName) == input$var2) 
       p <- ggplot(datasetToPlot,
-                    aes_string(input$var1)) + 
+                  aes_string(input$var1)) + 
         geom_histogram(fill = "blue") + theme(legend.position = "none") +
         plotOptions
+      
+      outlier_message <- ""
+      output$outlierMsg <- renderUI({ 
+        outlier_message
+      })
     }
     else if (input$var2=="None"){
-      p <- ggplot(dataset,
-                  aes_string(input$var1)) + 
-                            # text= "paste("input$var1)) + 
-        geom_histogram(fill = "blue") + theme(legend.position = "none") +
-        plotOptions
+      sub_data <- dataset[,input$var1]
+      
+      removeOutliers <- input$removeOutliers
+      if (removeOutliers == TRUE) {
+        # if removeOutliers is checked perform remove outliers function
+        data_no_outlier <- IQR.outliers(sub_data)
+        dataset_no_outlier_data <- as.data.frame(data_no_outlier)
+        colnames(dataset_no_outlier_data) <- input$var1
+        
+        p <- ggplot(dataset_no_outlier_data,
+                    aes_string(input$var1)) + 
+          # text= "paste("input$var1)) + 
+          geom_histogram(fill = "blue") + theme(legend.position = "none") +
+          plotOptions
+        
+        if (!is.null(data_no_outlier)) {
+          outlier_length <- length(unlist(sub_data)) - length(unlist(data_no_outlier))
+          outlier_message <- paste("Outlier(s): ", outlier_length)
+        } else {
+          outlier_message <- "Outlier(s): No outliers found"
+        }
+        
+        output$outlierMsg <- renderUI({ 
+          outlier_message
+        })
+      } else {
+        # if removeOutliers is not checked do not use remove outliers funciton
+        p <- ggplot(dataset, aes_string(input$var1)) + 
+          # text= "paste("input$var1)) + 
+          geom_histogram(fill = "blue") + theme(legend.position = "none") +
+          plotOptions
+        
+        outlier_message <- ""
+        
+        output$outlierMsg <- renderUI({ 
+          outlier_message
+        })
+      }
+      
     }
     else {
       # var2 (categorical) is specified and is not lab units
-      p <- ggplot(dataset,
-                  aes_string(input$var1, fill= input$var2)) + 
-        geom_histogram() + 
-        #scale_fill_viridis_d(na.value = "gray50") +
-        scale_fill_brewer(palette = "Paired", na.value = "gray50")
-        plotOptions
+      sub_data <- dataset[,c(input$var1,input$var2)]
+      
+      removeOutliers = input$removeOutliers
+      if (removeOutliers == TRUE) {
+        # if removeOutliers is checked perform remove outliers function
+        data_no_outlier <- IQR.outliers.second(sub_data)
+        
+        p <- ggplot(data_no_outlier,
+                    aes_string(input$var1, fill= input$var2)) +
+          scale_fill_brewer(palette = "Paired", na.value = "gray50") +
+          geom_histogram() + # theme(legend.position = "none") +
+          plotOptions
+        
+        if (!is.null(data_no_outlier)) {
+          outlier_length <- (length(unlist(sub_data)) - length(unlist(data_no_outlier))) / 2 # divide by two because there are two columns
+          outlier_message <- paste("Outlier(s): ", outlier_length)
+        } else {
+          outlier_message <- "Outlier(s): No outliers found"
+        }
+        
+        output$outlierMsg <- renderUI({ 
+          outlier_message
+        })
+      } else {
+        # if removeOutliers is not checked do not use remove outliers funciton
+        p <- ggplot(dataset,
+                    aes_string(input$var1, fill= input$var2)) + 
+          geom_histogram() + 
+          #scale_fill_viridis_d(na.value = "gray50") +
+          scale_fill_brewer(palette = "Paired", na.value = "gray50") + 
+          plotOptions
+        
+        outlier_message <- ""
+        
+        output$outlierMsg <- renderUI({ 
+          outlier_message
+        })
+      }
+      
     }
   }
   if (endsWith(input$var1, "_D")){
@@ -171,3 +264,4 @@ output$plot <- renderPlotly({
   if (resetFileInput$reset) return(NULL)
   p()
 })
+

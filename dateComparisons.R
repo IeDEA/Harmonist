@@ -208,7 +208,7 @@ globalDateChecksAfter <- function(errorFrame, resources){
       select(!!patientVarSym,
              any_of(allDateRelatedVars),
              recordIndex2=recordIndex)
-    # REVISIT THIS browser()
+    # REVISIT THIS 
     # iterate through all uploadedTables that have patientVar as ID
     for (tableName in c(indexTableName, resources$tablesAndVariables$tablesToCheckWithPatientID)){
       # find all of the date fields in current table, except global date field and any exceptions
@@ -382,39 +382,54 @@ generalDateOrder <- function(resources, groupVar, errorFrame, firstDate, secondD
 
 ## withinTableDateOrder ----------------------------------------------------------------------
 withinTableDateOrder <- function(errorFrame, resources){
-  dateOrderPairs <- list()
+  dateOrderPairs <- list() # pairs found based on naming conventions, sdExt and edExt
+  dateOrdersInData <- list() # pairs found in dataset that match date order json 
   dataset <- resources$formattedTables
   currentTables <- names(dataset)
-  # create a list of date order pairs in each table
-  for (tableName in currentTables){
-    tableData <- dataset[[tableName]]
-    varsInTable <- names(tableData)
-    # currently allows for only one date order pair per table
-    endDateName <- varsInTable[which(endsWith(varsInTable, edExt))]
-    if (is_empty(endDateName)) next
-    baseDateName <- str_sub(endDateName[[1]], end = -(1 + nchar(edExt)))
-    startDateName <- paste0(baseDateName, sdExt)
-    if (!startDateName %in% varsInTable) next
-    # we have found a date order pair. Add to list.
-    dateOrderPairs[[paste(tableName, baseDateName, sep = "_")]] <- 
-      tibble(tableName = tableName,
-             firstDate = startDateName,
-             secondDate = endDateName)
-  }
+
+  # if no sdExt or edExt were specified in Harmonist0C, no need to check for 
+  # date order pairs based on naming convention. Only check for those 
+  # explicitly listed in withinTableDateOrder.json
   
+  if (!is.null(sdExt) && !is.null(edExt)){
+    # create a list of date order pairs in each table
+    for (tableName in currentTables){
+      tableData <- dataset[[tableName]]
+      varsInTable <- names(tableData)
+      # currently allows for only one date order pair per table
+      endDateNames <- varsInTable[which(endsWith(varsInTable, edExt))]
+      if (is_empty(endDateNames)) next
+      baseDateNames <- str_sub(endDateNames, end = -(1 + nchar(edExt)))
+      # in case multiple date order pairs in a table:
+      for (baseDateName in baseDateNames){
+        startDateName <- paste0(baseDateName, sdExt)
+        if (!startDateName %in% varsInTable) next
+        # we have found a date order pair. Add to list.
+        endDateName <- paste0(baseDateName, edExt)
+        dateOrderPairs[[paste(tableName, baseDateName, sep = "_")]] <- 
+          tibble(tableName = tableName,
+                 firstDate = startDateName,
+                 secondDate = endDateName)
+      }
+    }
+  }
+
+  # now we have the date order pairs based on naming convention 
+  # listed in dateOrderPairs
   
   if (!is_empty(dateOrderPairs)){
     dateOrderPairs <- rbindlist(dateOrderPairs, use.names = TRUE)
   }
   
-  # if dateOrders json had other withintable date order pairs, include here
+  # if dateOrders (from withinTablesDateOrder json) listed other 
+  # within table date order pairs, include here (if exist in dataset)
   if (!is_empty(dateOrders)){
     dateOrdersInData <- rbindlist(dateOrders, use.names = TRUE) %>% 
       filter(tableName %in% resources$tablesAndVariables$tablesToCheck)
     if (nrow(dateOrdersInData) == 0){
-      dateOrdersInData <- NULL
+      dateOrdersInData <- list()
     }
-  }
+  } 
 
   if (is_empty(dateOrderPairs) && is_empty(dateOrdersInData)){
     return(errorFrame)
@@ -447,8 +462,8 @@ withinTableDateOrder <- function(errorFrame, resources){
     }
     
     tableToCheck <- table %>% select(tableIDField[[tableName]],
-                                     dateFields,
-                                     date_A_fields, 
+                                     all_of(dateFields),
+                                     all_of(date_A_fields), 
                                      recordIndex)
     date1 <- sym(firstDate)
     date2 <- sym(secondDate)

@@ -2,9 +2,8 @@ output$helpTabUI <- renderUI({
   fluidPage(
     tags$h3(class = "row_text title",
             "Help", backToHubMessage()),
-    tags$h5(class = "row_text subtitle",
-            ""),
-    tags$p("Helpful resources for Harmonist Data Toolkit users:",
+    tags$p(class = "faqHeader", "Helpful resources for Harmonist Data Toolkit users:",
+        tags$ul(class = "faq",
            tags$li(tags$a("Toolkit Quick Reference Guide for IeDEA Data Managers", 
                           href = "toolkitOnePageRef.pdf", target = "_blank")),
            tags$li(tags$a("IeDEA Harmonist Data Quality Checks Overview", 
@@ -16,7 +15,7 @@ output$helpTabUI <- renderUI({
            tags$li("Answers to frequently asked questions (below)")
            )
           # " to better understand the columns of the error detail spreadsheet available in Step 2."),
-           ,
+           ),
     fluidRow(
       htmlOutput("toolkitFAQ", seamless = "seamless")
     )

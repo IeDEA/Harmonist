@@ -530,7 +530,7 @@ generateErrorSummaryTables <- function(errorSummary, caption = "", reportFormat,
   groupingInfo <- errorSummaryShow %>% group_by(display, Table) %>% summarise(n = n())
   groupRows <- set_names(groupingInfo$n, groupingInfo$Table)
   errorSummaryShow <- errorSummaryShow %>% ungroup() %>% select(-Table, -display)
-  #browser() # start here with replacing with <1 and also right justifying
+  # FIXME start here with replacing with <1 and also right justifying
   if (exists("Error", errorSummaryShow)) errorSummaryShow <- errorSummaryShow %>% rename(Description = "Error")
   if (exists("InvalidCode", errorSummaryShow)){
     # if any characters that Kable can't handle are in any invalid codes, sanitize them

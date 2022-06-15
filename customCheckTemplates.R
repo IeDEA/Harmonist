@@ -1,8 +1,6 @@
 # later: pull from REDCap
 textForUnknown <- "Unknown"
 
-##########################################################################################
-# findDateRecords
 findDateRecords <- function(df, dateVar, dateVarSym, dateIsBlank = c(TRUE, FALSE)){
   # find records meeting date condition
   if (dateIsBlank){
@@ -21,8 +19,6 @@ findDateRecords <- function(df, dateVar, dateVarSym, dateIsBlank = c(TRUE, FALSE
     message = message))
 }
 
-##########################################################################################
-# findCodeRecords
 findCodeRecords <- function(df, codeVar, codeVarSym, codeCondition, codeValLabel, codeVal){
   
   if (codeCondition == "equal"){
@@ -95,10 +91,6 @@ checkDateAgreeWithCode <- function(errorFrame,
                                    severity = c("Error", "Warning", "Critical")
 ){
   # the conditions in the arguments define an ERROR record
-  
-  # check to confirm table exists in dataset
-  if (!tableName %in% names(resources$formattedTables)) return(errorFrame)
-  
   table <- resources$formattedTables[[tableName]]
   # check first to make sure both columns are present in the table
   if (!dateVar %in% names(table) || !codeVar %in% names(table)) return(errorFrame)
@@ -174,10 +166,6 @@ checkDateAgreeWithDate <- function(errorFrame,
                                    severity = c("Error", "Warning", "Critical")
 ){
   # the conditions in the arguments define an ERROR record
-  
-  # check to confirm table exists in dataset
-  if (!tableName %in% names(resources$formattedTables)) return(errorFrame)
-  
   table <- resources$formattedTables[[tableName]]
   # check first to make sure both columns are present in the table
   if (!date1Var %in% names(table) || !date2Var %in% names(table)) return(errorFrame)
@@ -257,126 +245,10 @@ checkDateAgreeWithDate <- function(errorFrame,
   return(errorFrame)
 }
 
-##############################################################################################
-# checkCodeAgreeWithCode 
-# FIX ME add error type and error code as arguments
-checkCodeAgreeWithCode <- function(errorFrame, 
-                                   resources,
-                                   tableName1, 
-                                   codeVar1,
-                                   codeCondition1 = c("equal", 
-                                                     "notequal", 
-                                                     "missing",
-                                                     "not_missing",
-                                                     "missing_or_unknown",
-                                                     "not_missing_or_unknown"),
-                                   codeValLabel1 = NULL,
-                                   codeVal1 = NULL,
-                                   tableName2,
-                                   codeVar2,
-                                   codeCondition2 = c("equal", 
-                                                     "notequal", 
-                                                     "missing",
-                                                     "not_missing",
-                                                     "missing_or_unknown",
-                                                     "not_missing_or_unknown"),
-                                   codeValLabel2 = NULL,
-                                   codeVal2 = NULL,
-                                   attributeTo = NULL,
-                                   severity = c("Error", "Warning", "Critical")
-){
-  # the conditions in the arguments define an ERROR record
-
-  # check to confirm table(s) exists in dataset
-  tableNames <- unique(c(tableName1, tableName2))
-  if (!tableNames %in% names(resources$formattedTables)) return(errorFrame)
-  
-  # check first to make sure the coded var 1 exists in table 1
-  if (!codeVar1 %in% names(resources$formattedTables[[tableName1]])) return(errorFrame)
-  # now make sure coded var 2 exists in table 2
-  if (!codeVar2 %in% names(resources$formattedTables[[tableName2]])) return(errorFrame)
-  
-  table1 <- resources$formattedTables[[tableName1]]
-  
-  # create variables for non standard evaluation
-  codeVarSym1 <- rlang::sym(codeVar1)
-  codeVarSym2 <- rlang::sym(codeVar2)
-  
-  # find records meeting code 1 condition
-  check1 <- findCodeRecords(
-    df = table1, 
-    codeVar = codeVar1, 
-    codeVarSym = codeVarSym1, 
-    codeCondition = codeCondition1, 
-    codeValLabel = codeValLabel1, 
-    codeVal = codeVal1
-  )
-  
-  if (nrow(check1$badRecords) == 0) return(errorFrame)
-  
-  # Now join with table 2 and see if records meet 2nd condition
-  
-  if (tableName1 == tableName2){
-    sameTable <- TRUE
-    combinedTable <- check1$badRecords
-  } else {
-    sameTable <- FALSE
-    # this works if both tables have patientVar as columns - FIX ME
-    combinedTable <- inner_join(check1$badRecords, 
-                               resources$formattedTables[[tableName2]],
-                               by = patientVar)
-  }
-  
-  # if no patients from the first check exist in the combined Table, exit
-  if (nrow(combinedTable) == 0) return(errorFrame)
-  
-  # find records meeting code 2 condition
-  check2 <- findCodeRecords(
-    df = combinedTable, 
-    codeVar = codeVar2, 
-    codeVarSym = codeVarSym2, 
-    codeCondition = codeCondition2, 
-    codeValLabel = codeValLabel2, 
-    codeVal = codeVal2
-  )
-  
-  # no bad records, then exit function
-  if (nrow(check2$badRecords)==0) return(errorFrame)
-  
-  # if there are are bad records, add them to the errorFrame
-  message <- paste("If",
-                   check1$message, 
-                   "and",
-                   check2$message, 
-                   "then this record is in error",
-                   collate = " ")
-  
-  error_field <- codeVar1
-  error_field2 <- codeVar2
-  
-  
-  errorFrame <- addToErrorFrame(
-    resources$formattedTables$tblBAS,
-    resources$finalGroupChoice, 
-    errorFrame, 
-    resources$uploadedTables[[tableName]][badRecords$recordIndex,], 
-    codeVar1, 
-    tableName1,
-    errorType = "Code conflict", 
-    errorCode = "2.3",
-    severity, message, 
-    error_field2 = codeVar2, 
-    error2 = as.character(resources$uploadedTables[[tableName]][badRecords$recordIndex,error_field2]),
-    crosstable = tableName2)
-  
-  return(errorFrame)
-}
-
-
 
 
 checkAgreement <- function(errorFrame, resources){
-  browser()
+
   errorFrame <- checkDateAgreeWithCode(
     errorFrame,
     resources,
