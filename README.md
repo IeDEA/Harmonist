@@ -8,5 +8,5 @@ The [Toolkit](https://iedeadata.org/iedea-harmonist) is part of a suite of tools
 
 The lead developer for the IeDEA Harmonist Data Toolkit is [Judy Lewis, PhD](mailto:judy.lewis@vumc.org) (Vanderbilt Institute for Clinical and Translational Research) with assistance from Jeremy Stephens (Vanderbilt University Department of Biostatistics).
 
-The Harmonist Data Toolkit has been generalized to allow adaptation to any data model that is described in a series of REDCap templates. Please contact [Judy Lewis, PhD](mailto:judy.lewis@vumc.org) for more information and guidance. 
+The Harmonist Data Toolkit has been generalized to allow adaptation to any data model that is described in a series of REDCap templates. Please review [adaptation steps](pages/adapting.md) and [guidance for adding custom data quality checks](pages/customchecks.md), and contact [Judy Lewis, PhD](mailto:judy.lewis@vumc.org) for more information and guidance. 
 
