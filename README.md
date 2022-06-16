@@ -6,5 +6,7 @@ The IeDEA Cohort Consortium collaborates to collect and define key variables, ha
 
 The [Toolkit](https://iedeadata.org/iedea-harmonist) is part of a suite of tools developed by the Harmonist Team with funding from the NIH (US NIAID grant R24 AI124872) with the goal of harmonizing observational HIV/AIDS data. Other components of the IeDEA suite of tools include a [browsable data model](https://iedeades.org) and a secure data hub for authenticated users.
 
-The lead developer for the IeDEA Harmonist Data Toolkit is [Judy Lewis, PhD](mailto:judy.lewis@vumc.org) (Vanderbilt Institute for Clinical and Translational Research) with assistance from Jeremy Stephens (Vanderbilt University Department of Biostatistics)
+The lead developer for the IeDEA Harmonist Data Toolkit is [Judy Lewis, PhD](mailto:judy.lewis@vumc.org) (Vanderbilt Institute for Clinical and Translational Research) with assistance from Jeremy Stephens (Vanderbilt University Department of Biostatistics).
+
+The Harmonist Data Toolkit has been generalized to allow adaptation to any data model that is described in a series of REDCap templates. Please contact [Judy Lewis, PhD](mailto:judy.lewis@vumc.org) for more information and guidance. 
 
