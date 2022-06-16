@@ -1,6 +1,6 @@
 # Adapting the Harmonist Data Toolkit to a Research Network (with no Hub)
 
-- Obtain access to [REDCap](https://projectredcap.org/partners/){:target="_blank"}.  
+- Obtain access to [REDCap](https://projectredcap.org/partners/).  
 - Install the REDCap Data Model Browser external module.  
 - Define the approved code lists for your data model in a copy of the Harmonist Code Lists (0B) REDCap project.
 - Describe your common data model in a copy of the Harmonist Data Model (0A) REDCap project.
@@ -8,7 +8,7 @@
 - Create a logo image that has a resolution of 100 x 40 pixels, and another with a resolution of 50 x 20 pixels.
 - Add the network-specific details, logo files, sample dataset zip file, etc. to the Harmonist Toolkit Metadata (0C) REDCap project.
 - Use the Harmonist JSON copy generator feature of the Data Model Browser external module to create JSON files summarizing those three projects. Those JSONs will be stored in records in the Harmonist JSON Files REDCap project.
-- Download the Harmonist Data Toolkit code from [Github](https://github.com/IeDEA/Harmonist){:target="_blank"}, install R and the required packages (Shiny, etc.). This application can be run on your local machine or installed on a server for web access.
+- Download the Harmonist Data Toolkit code from [Github](https://github.com/IeDEA/Harmonist), install R and the required packages (Shiny, etc.). This application can be run on your local machine or installed on a server for web access.
 - In REDCap, add API rights to a user (application) account for the relevant Harmonist REDCap projects. Edit the file named redcapTokens.R.example file, replace "your token here" with the API token for the indicated REDCap project. Rename the file redcapTokens.R and save. 
 - Edit definitions.R and specificDefinitions.R files and customize the variable values for your research group.
 - Edit globalDateBeforeChecks.json and globalDateAfterChecks.json to include details of dates that should be before or after all other dates (and exceptions to those).
