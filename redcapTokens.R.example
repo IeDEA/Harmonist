@@ -1,9 +1,14 @@
-tokenForHarmonist17 <- "your token here"
-tokenForHarmonist4 <- "your token here"
-tokenForHarmonist17A <- "your token here"
-tokenForHarmonist9 <- "your token here"
-tokenForHarmonist18 <- "your token here"
-tokenForHarmonist3 <- "your token here"
-tokenForHarmonist5 <- "your token here"
+tokenForHarmonist3 <- "your token here" # if Hub, concept info
+tokenForHarmonist4 <- "your token here" # if Hub, region info
+tokenForHarmonist5 <- "your token here" # if Hub, info on people 
+tokenForHarmonist9 <- "your token here" # if Hub, file transfer info
+tokenForHarmonist11 <- "your token here" # JSON copy project with data model details
+tokenForHarmonist17A <- "your token here" # user feedback
+tokenForHarmonist17 <- "your token here" # track user interactions
+tokenForHarmonistChangelog <- "your token here" # track changes to application
+tokenForHarmonist18 <- "your token here" # if Hub, contains token for valid user
+
+tokenForAfricaAgg <- "your token here" # for Africa dashboard aggregation project
+
 encryptionKey <- 'your key here' # for token decryption
 encryptionIV <- 'your vector here'
