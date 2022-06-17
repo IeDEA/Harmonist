@@ -26,7 +26,7 @@ checkName <- function(resources){
 
 ### Description of `newErrors` data frame that must be returned from a data quality check function
 
-Each record in the `newErrors` data frame describes an error detected in the dataset. This [document](pages/errorSpreadsheetGuide.pdf){target:"_blank} describes the columns in the error data frame.
+Each record in the `newErrors` data frame describes an error detected in the dataset. This [document](pages/errorSpreadsheetGuide.pdf) describes the columns in the error data frame.
 
 First, within the data quality check function, create a data frame with one record per error. The columns are described in the document linked above. Here is an example. The heading of the first column will be the patient grouping variable defined for the research network (in Harmonist0C). 
 * The errorCodes for custom data quality checks should begin with the number 5 or higher  (5.1, 5.12, 7.5, etc)
