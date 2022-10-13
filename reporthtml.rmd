@@ -16,7 +16,6 @@ params:
   unknownCodeSummaryByGroup: "unknownCodeSummaryByGroup"
   appearanceSummary: "appearanceSummary"
   errorTable: "errorTable"
-  datasetDesc: "datasetDesc"
   plotList: "plotList"
   includeDataSummary: "includeDataSummary"
   includeHistograms: "includeHistograms"
@@ -61,9 +60,6 @@ maxNumberOfHeatMapCharX <- 10
 `r headerMessage` `r regionMessage`
 
 Report date: `r Sys.Date()`
-
-`r params$datasetDesc` 
-
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(
 	echo = FALSE,

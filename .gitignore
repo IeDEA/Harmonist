@@ -1,9 +1,10 @@
 .Rproj.user
+.git - Copy/*.*
+.gitnew/*.*
 awsKey.R
+.env
 *.csv
 *.Rdata
-*.png
-redcapTokens.R
 server_name.R
 .Rhistory
 Rplot.pdf
@@ -13,6 +14,7 @@ code check thoughts.R
 createTestData.R
 dataChecksRevisingCodeCheck.R
 donut charts.R
+dqMetrics.R
 formattingTablesCodeEditing.R
 formattingTablesCodeReal.R
 heatmap.R
@@ -20,6 +22,7 @@ moreDQMetricscode.R
 new0a.R
 oldDqMetricIdeas.R
 otherVisitStats.R
+reportdqmetrics.rmd
 reportdqmetrics2.rmd
 sampleDatasetDescription.txt
 sessionReloadTest.R
@@ -27,4 +30,13 @@ temp.Rmd
 test
 upload_notes.txt
 writing to harmonist 3.R
+.DS_Store
+base-changes.diff
+harmonist.patch
+iedeaLogo.png
+iedeaLogoSmall.png
+tests/
+tmp-changes.diff
+tmp-changes.zip
+
 

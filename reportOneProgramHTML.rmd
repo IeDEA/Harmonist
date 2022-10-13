@@ -8,7 +8,6 @@ params:
   datasetSummary: "datasetSummary"
   datasetQuality: "datasetQuality"
   programSummary: "programSummary"
-  datasetDesc: "datasetDesc"
   p: "p"
   includeDataSummary: "includeDataSummary"
   includeHistograms: "includeHistograms"
@@ -36,10 +35,10 @@ if (userDetails$uploaduser_id == ""){
   regionMessage <- NULL
 } else regionMessage <- paste0("from Region ", params$region)
 
-if (!(params$datasetDesc=="")){
-  datasetLabel <- params$datasetDesc
-} else {datasetLabel <- NULL}
-
+# if (!(params$datasetDesc=="")){
+#   datasetLabel <- params$datasetDesc
+# } else {datasetLabel <- NULL}
+datasetLabel <- NULL
 ```
 
 ## `r knitr::include_graphics("project_logo_50_20.png")` Harmonist Data Toolkit Report for `r groupVar` `r program`

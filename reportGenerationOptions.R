@@ -129,7 +129,7 @@ output$histOptions<- renderUI({
   
   options <- tagList(
     selectInput("histoRange","Choose years to include in histograms",
-                choices = c("Years: 2000 - present" = "defaultRange",
+                choices = c("Years: 2004 - present" = "defaultRange",
                             "Choose a custom range of years" = "chooseRange"),
                 selected = selection)
   )
@@ -141,9 +141,10 @@ output$histOptions<- renderUI({
     moreOptions <- options
     moreOptions[["chooseYears"]] <- sliderInput("yearsToPlot",
                                                 "Date range to include in histograms:",
-                                                min = 1985, max = as.numeric(format(Sys.Date(), "%Y")),
+                                                min = minYearOptionForHistograms, 
+                                                max = as.numeric(format(Sys.Date(), "%Y")),
                                                 sep = "",
-                                                value = c(2000,max = as.numeric(format(Sys.Date(), "%Y"))),
+                                                value = c(minYearForHistograms, max = as.numeric(format(Sys.Date(), "%Y"))),
                                                 step = 1)
     return(
       box("Date Histogram Options", status = "primary", width = 12, moreOptions))

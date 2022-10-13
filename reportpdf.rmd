@@ -12,6 +12,7 @@ output:
     fig_width: 6
     fig_height: 9
     fig_caption: yes
+geometry: margin=0.5in
 params:
   allTables: "Tables"
   extraFiles: "extraFiles"
@@ -25,7 +26,6 @@ params:
   unknownCodeSummaryByGroup: "unknownCodeSummaryByGroup"
   appearanceSummary: "appearanceSummary"
   errorTable: "errorTable"
-  datasetDesc: "datasetDesc"
   plotList: "plotList"
   includeDataSummary: "includeDataSummary"
   includeHistograms: "includeHistograms"
@@ -56,7 +56,11 @@ if (userDetails$uploadconcept_mr == "MR000"){
 } else headerMessage <- paste0("Dataset submitted for Concept ", userDetails$uploadconcept_mr)
 if (userDetails$uploaduser_id == ""){
   regionMessage <- NULL
-} else regionMessage <- paste0("from IeDEA Region ", region)
+  fromHub <- FALSE
+} else {
+  regionMessage <- paste0("from IeDEA Region ", region)
+  fromHub <- TRUE
+}
 
 
 # max number of characters in x label in heat map for labels to be horizontal
@@ -68,8 +72,6 @@ maxNumberOfHeatMapCharX <- 10
 `r headerMessage` `r regionMessage`
 
 Report date: `r Sys.Date()`
-
-`r params$datasetDesc` 
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(
@@ -142,9 +144,20 @@ if (!is.null(sumProgs)){
 tableToShow <- params$tableOfVariables
 sumVars <- kbl(tableToShow, "latex",caption = "Summary of Uploaded Tables", longtable = T, booktabs = T) %>% 
   kable_styling(latex_options = c("striped", "repeat_header"),full_width = F)
-if (length(params$tableOfVariables) == 4){
-  sumVars <- sumVars %>% column_spec(3, width = "25em",border_left = T) %>% column_spec(4, "10em",border_left = T)
-} else sumVars <- sumVars %>% column_spec(3, width = "30em")
+
+# this table always has columns table, number of records, and DES Variables
+# it can have Non DES column
+# if from Hub, could have additional NOT REQUESTED column
+numCols <- length(params$tableOfVariables)
+
+if (numCols == 5){
+  sumVars <- sumVars %>% column_spec(3, width = "15em",border_left = T) %>% column_spec(4, "10em",border_left = T)%>% column_spec(5, "10em",border_left = T) 
+} else if (numCols == 4){
+   sumVars <- sumVars %>% column_spec(3, width = "20em",border_left = T) %>% column_spec(4, "10em",border_left = T)
+} else if (numCols == 3){
+  sumVars <- sumVars %>% column_spec(3, width = "30em")
+}
+
 sumVars
 if (!is_empty(params$extraFiles)){
   cat("####","Note that the following non-IeDEA files were uploaded but were not included in data quality checks: ", paste(params$extraFiles, collapse = ", "),"\n")

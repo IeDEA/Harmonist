@@ -214,8 +214,11 @@ addToErrorFrame <- function(indexTable, groupVar, errorFrame, table, field, tabl
   
   index <- paste0(tableName, field, errorType)
   if (exists(index, errorFrame)) {
-    errorFrame[[index]] <- rbind(errorFrame[[index]], newErrors)
-  } else errorFrame[[index]] <- newErrors   
+    index <- paste0(index, sample(1:100, 1)) # make this entry unique
+    # errorFrame[[index]] <- rbind(errorFrame[[index]], newErrors)
+  } 
+  errorFrame[[index]] <- newErrors
+
   print("done adding error")
   return(errorFrame)
 }
@@ -424,7 +427,9 @@ findMissingRequiredValues <- function(errorFrame, resources){
     requiredVariables <- findVariablesMatchingCondition(tableName, tableDef, "variable_required", "1")
     
     for (fieldName in requiredVariables){
-      if (fieldName %in% requiredAtBaseline) next # in specific definitions, only required at baseline SRN
+      if (networkName == "IeDEA"){
+         if (fieldName %in% requiredAtBaseline)  next # in specific definitions, only required at baseline SRN
+      }
 
       print(paste0("checking missing ", fieldName, Sys.time()))
       

@@ -71,7 +71,7 @@ output$reportPage <- renderUI({
                               tags$p("When you are ready to submit this dataset for",
                                     tags$b(userDetails()$uploadconcept_mr, ","),
                                      "continue to the next step."),
-                              tags$p(tags$em('Note: A default "all groups" report will be stored when you submit your dataset. This report is accessible via the IeDEA Hub.')),
+                              tags$p(tags$em('Note: A default "all groups" report will be stored when you submit your dataset. This report is accessible via the', networkName, 'Hub.')),
 
                               actionButton("step4", "Continue to Step 4", class="btn-success")
                             )
@@ -101,11 +101,11 @@ output$reportPage <- renderUI({
   
   dqRequestedVarText <- ifelse(hubInfo$fromHub,
                                paste("Include variables requested by", userDetails()$uploadconcept_mr),
-                               "Include only tblBAS (required variables)")
+                               paste0("Include only ", indexTableName, " (required variables)"))
   defaultReportContent <- ifelse(
     hubInfo$fromHub,
     "By default, only requested variables (i.e., variables specified for a data call) are summarized.",
-    "By default, the report summarizes the required variables in tblBAS."
+    paste0("By default, the report summarizes the required variables in ", indexTableName, ".")
   )
   
   if (networkName == "IeDEA"){
@@ -121,9 +121,9 @@ output$reportPage <- renderUI({
                                      choiceNames = c(
                                        dqRequestedVarText,
                                        "Include all IeDEA DES variables in this dataset"
-                                     )),
-                        textInput("reportDesc",
-                                  "(Optional) Short title for report heading")),
+                                     ))),
+                        # textInput("reportDesc",
+                        #           "(Optional) Short title for report heading")),
                  column(width = 2,
                         img(src="reportIcon2.png", class="report_icon")
                  )
@@ -163,10 +163,10 @@ output$reportPage <- renderUI({
                             # tags$b("Customize report"),
                             selectInput("reportType","File format for report",
                                         choices = c("PDF" = "pdf", "HTML" = "html")),
-                            uiOutput("programsToInclude"),
+                            uiOutput("programsToInclude") #,
                             #uiOutput("chooseMultipleGroups"),
-                            textInput("datasetDesc",
-                                      "(Optional) Short title for report heading")
+                            # textInput("datasetDesc",
+                            #           "(Optional) Short title for report heading")
                      ),
                      column(width = 6,
                             offset = 0,

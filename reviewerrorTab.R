@@ -99,8 +99,20 @@ makeDetailsPretty <- function(df, error_field, linkToDataModel){
     toShow[[identifier]] <- df$id3
     numberOfIdCols <- 3
   }
+  if (exists("id4", df)){
+    identifier <- findVariableName(df, "id4_field")
+    if (is.null(identifier)) identifier <- "Unknown"
+    toShow[[identifier]] <- df$id4
+    numberOfIdCols <- 4
+  }
+  if (exists("id5", df)){
+    identifier <- findVariableName(df, "id5_field")
+    if (is.null(identifier)) identifier <- "Unknown"
+    toShow[[identifier]] <- df$id5
+    numberOfIdCols <- 5
+  }
   lineReturn <- tags$br()
-  if (networkName == "IeDEA"){
+  if (projectDef$datamodel_url_y == "1"){
     if (df$category[[1]] == "Invalid Code"){
       if (str_detect(df$description[[1]], "Valid codes")){ # then valid codes are listed in description
         explanation <- "See more details about"
@@ -118,10 +130,9 @@ makeDetailsPretty <- function(df, error_field, linkToDataModel){
   if (!error_field %in% names(toShow)){
     toShow[[error_field]] <- df$error
   }
-  
-  if (networkName == "IeDEA") {
+  if (projectDef$datamodel_url_y == "1") {
     linkToVariableInDataModel <- tags$a(
-      paste0(error_field, " in the IeDEA DES."), 
+      paste0(error_field, " in the ", networkName, " ", projectDef$datamodel_abbrev,"."), 
       href = linkToDataModel, target="_blank")
   } else {
     explanation <- ""
@@ -681,19 +692,41 @@ observeEvent(input$lastClick, {
   mentionVariable <- ifelse(str_detect(rowData$category, rowData$variable), 
                             "",
                             paste("for", rowData$variable))
-  showModal(tags$div(id="infoModal", modalDialog(
-    size = "l",
-    title = div(icon("info-circle"),"Error Detail"),
-    tags$h4(rowData$category, mentionVariable, "in", tableName,
-            span(paste(rowData$number, errorWord), class = badgeClass)), # style=badgeColor)),
-    
-    detailsForModal$errorDesc,
-    tags$br(),
-    tags$br(),
-    detailTable,
-    footer = actionButton("close_detail_modal", label = "Close", class = "color_btn")
-    
-  )))
+  # if large number of columns in table, use mymodal function. 
+  # Otherwise, use modalDialog, window size "l"
+  if (length(detailsForModal$toShow) > 4){
+    showModal(
+      tags$div(id="infoModal", mymodal(
+        title = div(icon("info-circle"),"Error Detail"),
+        tags$h4(rowData$category, mentionVariable, "in", tableName,
+                span(paste(rowData$number, errorWord), class = badgeClass)), # style=badgeColor)),
+        
+        detailsForModal$errorDesc,
+        tags$br(),
+        tags$br(),
+        detailTable,
+        footer = actionButton("close_detail_modal", label = "Close", class = "color_btn"),
+        idcss = "errdetail")
+      )
+    )
+  } else {
+    showModal(
+      tags$div(id="infoModal", modalDialog(
+        size = "l",
+        title = div(icon("info-circle"),"Error Detail"),
+        tags$h4(rowData$category, mentionVariable, "in", tableName,
+                span(paste(rowData$number, errorWord), class = badgeClass)), # style=badgeColor)),
+        
+        detailsForModal$errorDesc,
+        tags$br(),
+        tags$br(),
+        detailTable,
+        footer = actionButton("close_detail_modal", label = "Close", class = "color_btn"),
+        idcss = "errdetail")
+      )
+    )
+  }
+  
 }, ignoreInit = TRUE)
 
 observeEvent(input$close_detail_modal, {

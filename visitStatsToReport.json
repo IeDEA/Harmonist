@@ -1,0 +1,36 @@
+{
+  "ENROL_D":
+  {
+    "table":"tblBAS",
+    "displayName": "Enrolled",
+    "codeListNum": null
+  },
+  "VIS_D":
+  {
+    "table": "tblVIS",
+    "displayName": "Visits",
+    "codeListNum": null
+  },
+  "DEATH_D":
+  {
+    "table": "tblLTFU",
+    "displayName": "Deaths"
+  },
+  "DROP_D":{
+    "table": "tblLTFU",
+    "displayName": "Transfers Out",
+    "codedVar": "DROP_RS",
+    "codeListNum": "32",
+    "codeValues": ["4", "4.1"]
+  },
+  "RNA_D":
+  {
+    "table": "tblLAB_RNA",
+    "displayName": "Viral Load"
+  },
+  "CD4_D":
+  {
+    "table": "tblLAB_CD4",
+    "displayName": "CD4"
+  }
+}

@@ -96,9 +96,19 @@ a[data-value=menu-header] {
   background:#fff;
     border:0;
 }
-
+.skin-blue .main-sidebar .sidebar .sidebar-menu a[data-value=changelog]{
+  background: #f9f9f9;
+    pointer-events: none;
+    border:0;
+}
 .row_text,.rowSelectFiles,.rowactiveDataRequest,.rowUploadComplete, .rowNoActiveDataRequest,.shiny-html-output .row{
   padding-left:20px;
+}
+.faqHeader{
+  padding-left: 50px;
+}
+.faq{
+  padding-left:100px;
 }
 .rowDataUploadGuidelines{
   padding-left:40px;

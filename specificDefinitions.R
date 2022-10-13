@@ -29,8 +29,16 @@ srnEnrolDateVar <- "ic_dt"
 approvedExtraVariables <- c("PROGRAM", "CENTER", "REGION")
 
 # the following explicit definitions should be moved to a json or REDCap
-desiredPlots <- c("ENROL_D", "VIS_D", "ART_SD", "CD4_D","RNA_D","DIS_D" )
-desiredTables <- c("tblBAS", "tblVIS", "tblART", "tblLAB_CD4", "tblLAB_RNA", "tblDIS")
+#desiredPlots <- c("ENROL_D", "VIS_D", "ART_SD", "CD4_D","RNA_D","DIS_D" )
+#desiredTables <- c("tblBAS", "tblVIS", "tblART", "tblLAB_CD4", "tblLAB_RNA", "tblDIS")
+
+#test <- downloadREDCapFile("histograms.json", tokenForHarmonist0C, 1, "histograms") #, formName = "toolkit_json_files")
+desiredPlotInfo <- jsonlite::read_json("histograms.json")
+desiredPlots <- names(desiredPlotInfo)
+desiredTables <- unname(unlist(lapply(desiredPlotInfo,
+                        function(x){
+                          return(x$table)
+                        })))
 
 # IeDEA-specific, used to skip fields in check for codes that are missing or unknown -
 # should this rely instead on for dq checkbox in 0A?
@@ -42,18 +50,27 @@ interesting <- c("SEX","NAIVE_Y","AIDS_Y","RECART_Y", "MODE", "MED_ID", "DEATH_Y
 isFactor <- c("CENTER", "COUNTRY","PROVINCE", "DISTRICT", "CITY") #maybe take out
 
 # for report
-visitStatsToReport <- c("Enrolled","Visits", "Deaths", "Transfers Out", "Viral Load","CD4")
-# to add to report
+# visitStatsToReport <- c("Enrolled","Visits", "Deaths", "Transfers Out", "Viral Load","CD4")
+#test <- downloadREDCapFile("visitStatsToReport.json", tokenForHarmonist0C, 1, "visitstats") #, formName = "toolkit_json_files")
+visitStatsToReport <- jsonlite::read_json("visitStatsToReport.json")
+
+# to add to report - not implemented yet
 otherStatsToReport <- c("Enrolled", "Patients with > 2 visits", "Patients deceased, transferred out, or with no visit in the past 6 months",
                         "Median length of follow up (years)", "Median number of viral loads per patient")
 
-codesIndicatingTransfer <- c(codes$'32'$`4`, codes$'32'$`4.1`) # this is the code text, not numeric code value
+if (networkName == "IeDEA"){
+  codesIndicatingTransfer <- c(codes$'32'$`4`, codes$'32'$`4.1`) # this is the code text, not numeric code value
+}
+
+minYearOptionForHistograms <- 2000
 numYearsInReport <- 8 # include 8 most recent years
 minYearForVisitStats <- year(Sys.Date()) - numYearsInReport  
 
 pregnancyTables <- c("tblPREG","tblNEWBORN","tblPREG_OUT","tblNEWBORN_ABNORM","tblDELIVERY_MUM","tblDELIVERY_CHILD")
 
-# date approximation logic -- IeDEA-specific
+# date approximation logic -- IeDEA-specific - 
+# so far, the date approximation logic applies to multiple networks so it's not in 
+# a REDCap JSON yet
 datePairChecks <- jsonlite::read_json("dateApproximationLogic.json")
 datePairChecks <- lapply(datePairChecks, function(x){
   x$first_A <- unlist(replace(x$first_A, x$first_A=="NA", NA))

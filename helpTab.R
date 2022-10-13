@@ -6,11 +6,11 @@ output$helpTabUI <- renderUI({
         tags$ul(class = "faq",
            tags$li(tags$a("Toolkit Quick Reference Guide for IeDEA Data Managers", 
                           href = "toolkitOnePageRef.pdf", target = "_blank")),
-           tags$li(tags$a("IeDEA Harmonist Data Quality Checks Overview", 
+           tags$li(tags$a("Harmonist Data Quality Checks Overview", 
                           href = "dataQualityChecks.pdf", target = "_blank")), 
-           tags$li(tags$a("IeDEA Harmonist Error Spreadsheet Guide ", 
+           tags$li(tags$a("Harmonist Error Spreadsheet Guide ", 
                           href = "errorSpreadsheetGuide.pdf", target="_blank")), 
-           tags$li(tags$a("IeDEA Harmonist Data Toolkit Demonstration Video ", 
+           tags$li(tags$a("Harmonist Data Toolkit Demonstration Video ", 
                           href = "https://youtu.be/pL_RRhvzX-w", target="_blank")),
            tags$li("Answers to frequently asked questions (below)")
            )

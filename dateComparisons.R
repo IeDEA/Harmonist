@@ -6,7 +6,7 @@ add_A_to_errorFrame <- function(indexTable, groupVar, errorFrame, first_A, first
   # tableOfErrorRecords is uploadedTables not formattedTables at this time
   
   message <- paste0(secondDate, " should not be before ", firstDate)
-  errorType <-  paste0(secondDate, " before ", firstDate)
+  errorType <- paste0(secondDate, " before ", firstDate)
   if (first_A_flag){
     toPrint <- tableOfErrorRecords_first[[first_A]]
     toPrint[which(safeTrimWS(toPrint) == "")] <- "blank (treated as D)"
@@ -93,7 +93,7 @@ globalDateChecksBefore <- function(errorFrame, resources){
     }
     
     globalDate <- resources$formattedTables[[dateCheck$table]] %>% 
-      filter(!!rlang::sym(globalDateName) != dateIndicatingUnknown) %>%  
+      filter(!(!!rlang::sym(globalDateName) %in% dateIndicatingUnknown)) %>%  
       filter(!is.na(!!rlang::sym(globalDateName))) %>% 
       select(!!patientVarSym, 
              any_of(allDateRelatedVars),
@@ -136,12 +136,12 @@ globalDateChecksBefore <- function(errorFrame, resources){
       for (secondDate in dateFields){
         badDates <- NULL
         badDates <- dateTable[which( (dateTable[[secondDate]] < dateTable[[firstDate]]) &
-                                       (dateTable[[secondDate]] != dateIndicatingUnknown) ),]
+                                       (!dateTable[[secondDate]] %in% dateIndicatingUnknown) ),]
         
         if (nrow(badDates) == 0) next
         #--------------------------potential date logic errors were found---------------------
         #errorType <-  paste0("Date before ", firstDate) 
-        errorType <-  paste0(secondDate, " before ", firstDate) 
+        errorType <- paste0(secondDate, " before ", firstDate) 
         message <- paste0(secondDate, " should not be before ", firstDate, ".")
         #------If network doesn't have date approximation variables OR -----------------------
         #------if no _A fields, these are all errors------------------------------------------
@@ -203,7 +203,7 @@ globalDateChecksAfter <- function(errorFrame, resources){
     }
     
     globalDate <- resources$formattedTables[[dateCheck$table]] %>% 
-      filter(!!rlang::sym(globalDateName) != dateIndicatingUnknown) %>%  
+      filter(!(!!rlang::sym(globalDateName) %in% dateIndicatingUnknown)) %>%  
       filter(!is.na(!!rlang::sym(globalDateName))) %>% 
       select(!!patientVarSym,
              any_of(allDateRelatedVars),
@@ -247,11 +247,11 @@ globalDateChecksAfter <- function(errorFrame, resources){
       for (firstDate in dateFields){
         badDates <- NULL
         badDates <- dateTable[which( (dateTable[[secondDate]] < dateTable[[firstDate]]) &
-                                       (dateTable[[secondDate]] != dateIndicatingUnknown) ),]
+                                       (!dateTable[[secondDate]] %in% dateIndicatingUnknown) ),]
 
         if (nrow(badDates) == 0) next
         #--------------------------potential date logic errors were found---------------------
-        errorType <-  paste0(secondDate, " before other date") #edited
+        errorType <- paste0(secondDate, " before ", firstDate) #edited
         message <- paste0(secondDate, " should not be before ", firstDate, ".")
         #------If network doesn't have date approximation variables OR -----------------------
         #------if no _A fields, these are all errors------------------------------------------
@@ -386,12 +386,17 @@ withinTableDateOrder <- function(errorFrame, resources){
   dateOrdersInData <- list() # pairs found in dataset that match date order json 
   dataset <- resources$formattedTables
   currentTables <- names(dataset)
-
   # if no sdExt or edExt were specified in Harmonist0C, no need to check for 
   # date order pairs based on naming convention. Only check for those 
   # explicitly listed in withinTableDateOrder.json
+  startEndFlag <- TRUE
   
-  if (!is.null(sdExt) && !is.null(edExt)){
+  if (is.null(sdExt) || is.null(edExt)
+      || (safeTrimWS(sdExt) == "") || (safeTrimWS(edExt) == "")){
+    startEndFlag <- FALSE
+  } 
+  
+  if (startEndFlag){
     # create a list of date order pairs in each table
     for (tableName in currentTables){
       tableData <- dataset[[tableName]]
@@ -468,13 +473,13 @@ withinTableDateOrder <- function(errorFrame, resources){
     date1 <- sym(firstDate)
     date2 <- sym(secondDate)
     badDates <- tableToCheck %>% filter(!is.na(!!date1)) %>% filter(!is.na(!!date2)) %>% 
-      filter(!!date1 != dateIndicatingUnknown) %>% filter(!!date2 != dateIndicatingUnknown) %>% 
+      filter(! (!!date1 %in% dateIndicatingUnknown)) %>% filter(! (!!date2 %in% dateIndicatingUnknown)) %>% 
       filter(!!date2 < !!date1)
     
     
     if (nrow(badDates) == 0) next
     #--------------------------potential date logic errors were found---------------------
-    errorType <-  paste0(secondDate, " before ", firstDate)
+    errorType <- paste0(secondDate, " before ", firstDate)
     message <- paste0(secondDate, " should not be before ", firstDate, " in table ", tableName, ".")
     #------Simple case first: if no _A fields, these are all errors-----------------------
     if (

@@ -178,6 +178,23 @@ findTableByIndex <- function(index){
   return(tableName)
 }
 
+# this is if you only need the variable name, not the table
+findVarFromIndex <- function(indexstring){
+  tablevar <- strsplit(indexstring, ":")[[1]]
+  # if somehow there's no table:variable in string, ignore
+  if (length(tablevar) != 2) return(NULL)
+  
+  varTableIndex <- tablevar[[1]]
+  varTableName <- findTableByIndex(varTableIndex)
+  if (is.null(varTableName)) return(NULL)
+  varVariableIndex <- tablevar[[2]]
+  varVariableName <- findVariablesMatchingCondition(varTableName, tableDef, "redcapIndex", varVariableIndex)
+  if (is_empty(varVariableName)) return(NULL)
+  return(varVariableName)
+}
+
+
+
 #findVariable
 
 # change table name to badge with color corresponding to DES
@@ -194,93 +211,6 @@ tableBadge <-  function(tableNames){
 }
 
 
-# createListsOfTablesAndVariables ------------------------------------------------------------
-createListsOfTablesAndVariables <- function(tableList, tableDef){
-  tableNameList <- set_names(names(tableList), names(tableList))
-  numberOfRecords <- sapply(tableList, nrow)
-  # create variable to count deprecated variables
-  deprecated_count = 0
-  
-  #variableDefs <- lapply(tableNameList, function(x){names(tableDef[[x]]$variables)})
-  variableNameListByTable <- lapply(tableNameList, function(x){names(tableDef[[x]]$variables)})
-  variableDefs <- lapply(tableNameList, function(x){tableDef[[x]]$variables})
-  #create a list of des variables by table, highlight deprecated variables with red text
-  #
-  des_variables_list <- list()
-  deprecated_list <- list()
-  for (tableName in tableNameList){
-    des_variables <- intersect(names(variableDefs[[tableName]]), names(tableList[[tableName]]))
-    
-    # Get list of deprecated variables in table using variable_status in tableDef:
-    # 0, DRAFT (variable under consideration)
-    # 1, Active
-    # 2, DEPRECATED (variable retired from use)
-    deprecatedVariables <- sapply(variableDefs[[tableName]], function(var){
-      value <- var[["variable_status"]]
-      !is.null(value) && value == "2"
-    })
-    deprecatedVariables <- intersect(des_variables, names(which(deprecatedVariables)))
-    if (!is_empty(deprecatedVariables)){
-      # keep track of total number of deprecated variables
-      deprecated_count <- deprecated_count + length(deprecatedVariables)
-      deprecated_list[[tableName]] <- deprecatedVariables
-      active_des_variables <- des_variables[!des_variables %in% deprecatedVariables]
-      des_variables <- paste0(paste(active_des_variables, collapse = ", "), ", ",
-                              paste0('<span style="color:#dd4b39">', deprecatedVariables,'</span>', 
-                                     collapse = ", ")
-      )
-    } else des_variables <- paste(des_variables, collapse = ", ")
-    des_variables_list[[tableName]] <- des_variables
-  }
-
-  #create a list of variables in each table that are not found in the des for that table
-  non_des_variables <- mapply(function(x, y) {
-    variablesInTable <- names(x)
-    non_des <- variablesInTable[which(!variablesInTable %in% y)]
-   # non_des <- paste(non_des, collapse = ", ")
-    return(non_des)
-  }, x =tableList, y =variableNameListByTable, SIMPLIFY = FALSE)
-  
-  #create summary table. Only include NonDES column if those variables exist
-  if (is_empty(unlist(non_des_variables))){
-    non_des_count <- 0
-    toDisplay <- tibble("Table" = tableBadge(names(tableList)), 
-                            "Records" = numberOfRecords,
-                            "networkName datamodel_abbrev Variables" = unlist(des_variables_list))
-  } else {
-    all_non_des <- unique(unlist(non_des_variables))
-    non_des_count <- length(all_non_des[!all_non_des %in% approvedExtraVariables])
-    non_des_to_display <- lapply(non_des_variables, 
-                                 function(x){
-                                   if (length(x) < maxExtraVar){ # in definitions
-                                     paste0(x, collapse = ", ")
-                                   } else {
-                                     paste0(length(x), " additional data columns")
-                                   }
-                                 }
-    )
-    
-    toDisplay <- tibble("Table" = tableBadge(names(tableList)), 
-                            "Records" = numberOfRecords,
-                            "networkName datamodel_abbrev Variables" = unlist(des_variables_list),
-                            "Extra Variables" = unlist(non_des_to_display))
-  }
-  
-  names(toDisplay) <- gsub("networkName datamodel_abbrev", 
-                           paste0(networkName, " ", projectDef$datamodel_abbrev),
-                           names(toDisplay))
-  # return details for uploadTab upload summary
-  return(
-    list(
-      non_des_count = non_des_count,
-      des_variables = removeHTML(des_variables_list),
-      non_des_variables = non_des_variables,
-      variableSummaryToDisplay = toDisplay,
-      deprecated_count = deprecated_count,
-      deprecated_list = deprecated_list
-    )
-  ) 
-}
 
 
 # sanitizeNames --------------------------------------------------------
@@ -372,23 +302,25 @@ grubbs.outliers <- function(data, threshold=0.1, cutoff=10)
   fail
 }
 
-IQR.outliers <- function(datavector)
+IQR.outliers <- function(datavector, outlier_level)
 {
+  if (outlier_level == 'Less') { outlier_level = 2.6 } else { outlier_level = 1.5 }
   dataiqr <- IQR(datavector, na.rm = TRUE, type = 2)
   datamedian <- median(datavector, na.rm = TRUE)
-  lowerlimit <- datamedian - 1.5 * dataiqr
-  upperlimit <- datamedian + 1.5 * dataiqr
+  lowerlimit <- datamedian - outlier_level * dataiqr
+  upperlimit <- datamedian + outlier_level * dataiqr
   data_no_outlier <- subset(datavector, datavector > lowerlimit & datavector < upperlimit)
   return (data_no_outlier)
 }
 
-IQR.outliers.second <- function(dataframe)
+IQR.outliers.second <- function(dataframe, outlier_level)
 {
+  if (outlier_level == 'Less') { outlier_level = 2.6 } else { outlier_level = 1.5 }
   double <- unlist(dataframe[1])
   dataiqr <- IQR(double, na.rm = TRUE, type = 2)
   datamedian <- median(double, na.rm = TRUE)
-  lowerlimit <- datamedian - 1.5 * dataiqr
-  upperlimit <- datamedian + 1.5 * dataiqr
+  lowerlimit <- datamedian - outlier_level * dataiqr
+  upperlimit <- datamedian + outlier_level * dataiqr
   data_no_outlier <- subset(dataframe, dataframe[1] > lowerlimit & dataframe[1] < upperlimit)
   return (data_no_outlier)
 }

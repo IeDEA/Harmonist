@@ -39,7 +39,7 @@ findUnknownDatesCodedImproperly <- function(resources, groupVar, errorFrame, for
     print(dateField_A)
     datesImproperlyCoded <- formattedTable %>%  filter(!! rlang::sym(dateField_A) == "Unknown") %>% 
       filter(!is.na(!! rlang::sym(dateFieldName))) %>% 
-      filter(!! rlang::sym(dateFieldName) != dateIndicatingUnknown)
+      filter(! (!! rlang::sym(dateFieldName)) %in% dateIndicatingUnknown)
     if (nrow(datesImproperlyCoded) > 0){
       errorFrame <- addToErrorFrameDateFormatErrors(resources, groupVar, errorFrame, datesImproperlyCoded, 
                                                     dateFieldName, tableName, "_D_A", "Warning",  
@@ -94,10 +94,16 @@ findFutureDates <- function(resources, groupVar, errorFrame, table, formattedTab
 findDatesOutOfRange <- function(resources, groupVar, errorFrame, table, formattedTable, dateFieldName, tableName){
       # now check for dates that seem earlier than expected range, first BIRTH_D then other dates
       # 
-  if (dateFieldName == birthDateVar){
+  if (networkName == "NA-ACCORD"){
+    actualBirthDateVar <- paste0(birthDateVar, "_CALCDATE")
+  } else {
+    actualBirthDateVar <- birthDateVar
+  }
+  if (dateFieldName == actualBirthDateVar){
     minDate <- minimumExpectedBirthDate
     errorType <- "earlyBIRTH_D"
-    earlyDates <- (formattedTable[[dateFieldName]] < minDate) & (formattedTable[[dateFieldName]] != dateIndicatingUnknown)
+    earlyDates <- (formattedTable[[dateFieldName]] < minDate) & 
+      (!formattedTable[[dateFieldName]] %in% dateIndicatingUnknown)
     if (any(earlyDates, na.rm = TRUE)){
       errorFrame <- addToErrorFrameDateFormatErrors(resources, groupVar, errorFrame, table[which(earlyDates),],
                                                     dateFieldName, tableName, errorType,"Warning")
@@ -106,7 +112,8 @@ findDatesOutOfRange <- function(resources, groupVar, errorFrame, table, formatte
   else if (!(dateFieldName %in% datesThatCanBeBefore1980)){
     minDate <- minimumExpectedDate
     errorType  <- "earlyDate"
-    earlyDates <- (formattedTable[[dateFieldName]] < minDate) & (formattedTable[[dateFieldName]] != dateIndicatingUnknown)
+    earlyDates <- (formattedTable[[dateFieldName]] < minDate) & 
+      (!formattedTable[[dateFieldName]] %in% dateIndicatingUnknown)
     if (any(earlyDates, na.rm = TRUE)){
       errorFrame <- addToErrorFrameDateFormatErrors(resources,
                                                     groupVar, errorFrame, table[which(earlyDates),],
@@ -119,7 +126,7 @@ findDatesOutOfRange <- function(resources, groupVar, errorFrame, table, formatte
 
 
 detectInvalidDates <- function(resources, groupVar, errorFrame, table, formattedTable, dateFieldName, tableName, severity){
-  #check first for dates with _A = Unknown but date != 1911-11-11 (dateIndicatingUnknown)
+  #check first for dates with _A = Unknown but date != 1911-11-11 (or other dateIndicatingUnknown)
   errorFrame <- findUnknownDatesCodedImproperly(resources, groupVar, errorFrame, formattedTable, dateFieldName, tableName)
   errorFrame <- findBadDateFormats(resources, groupVar, errorFrame, table, formattedTable, dateFieldName, tableName)
   errorFrame <- findFutureDates(resources, groupVar, errorFrame, table, formattedTable, dateFieldName, tableName)

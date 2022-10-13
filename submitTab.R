@@ -626,8 +626,8 @@ createSubmissionReport <- function(type = c("PDF", "html")) {
   createReport(file = filename, reportType = type,
                includeHistograms = TRUE,
                includeDataSummary = TRUE,
-               includeErrorSummary = TRUE,
-               datasetDesc = NULL)
+               includeErrorSummary = TRUE) 
+             #  datasetDesc = NULL)
 
   return(list(dir = dir, filename = filename))
 }

@@ -39,6 +39,7 @@ output$welcomeUI <- renderUI({
       " common data model"
     )
   }
+  # note below that path for href for sample dataset is relative to www
   
   return(
     fluidPage(
@@ -63,7 +64,7 @@ output$welcomeUI <- renderUI({
                    tags$a("Sample dataset ", href = "projectFiles/sample_dataset.zip", target = "_blank"), 
                    " to test the Toolkit and learn about its functions. ",
                    "View the ", 
-                   tags$a("IeDEA Harmonist Data Toolkit Video ", 
+                   tags$a("Harmonist Data Toolkit Video ", 
                           href = "https://youtu.be/pL_RRhvzX-w", target="_blank"), 
                    " for a demonstration. Please visit the",
                    actionLink("goToHelp", "Help page"), 

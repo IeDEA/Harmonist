@@ -155,69 +155,112 @@ earlyYears <-  function(x){
 
 # JUDY revisit: what about excluding duplicate entries?
 createVisitStats <- function(tableData, reportFormat){
+  # visitStatsToReport is global from visitStatsToReport.json JSON (read in specificDefinitions.R)
+  visitStatsVars <- names(visitStatsToReport) 
+
   visitStats <- NULL
-  visitStats$enrol <- tableData[[indexTableName]]  %>% select(!!patientVarSym, !!enrolDateVarSym) %>% 
-    filter(!!enrolDateVarSym != dateIndicatingUnknown) %>%
-    filter(!is.na(!!enrolDateVarSym)) %>% 
-    filter(!!enrolDateVarSym <= Sys.Date()) %>% 
-    mutate(Year1 = year(!!enrolDateVarSym)) %>% 
-    mutate(Year = earlyYears(Year1)) %>% 
-    group_by(Year) %>% dplyr::summarize(Count = n()) %>% mutate(Variable = visitStatsToReport[[1]])
-  if (networkName == "IeDEA"){
-    # NEED TO CUSTOMIZE REPORT FOR OTHER DATA MODELS
-    if ("tblVIS" %in% tablesAndVariables$tablesToCheck){
-      visitStats$visits <- tableData$tblVIS %>% select(PATIENT, VIS_D) %>% 
-        filter(VIS_D != dateIndicatingUnknown) %>%
-        filter(!is.na(VIS_D)) %>% 
-        distinct(PATIENT, VIS_D, .keep_all = TRUE) %>% 
-        filter(VIS_D <= Sys.Date()) %>% 
-        mutate(Year1 = year(VIS_D)) %>% 
-        mutate(Year = earlyYears(Year1)) %>% 
-        group_by(Year) %>% dplyr::summarize(Count = n()) %>% mutate(Variable = visitStatsToReport[[2]])
+  
+  for (visitStatsVar in visitStatsVars){
+    thisStat <- visitStatsToReport[[visitStatsVar]]
+    
+    # make sure the table and the variable are in the dataset
+    if (!thisStat$table %in% names(tableData)) next
+    if (!visitStatsVar %in% names(tableData[[thisStat$table]])) next
+    
+    # is there a second, coded variable involved in this stat?    
+    if (exists("codedVar", thisStat)){
+      if (!thisStat$codedVar %in% names(tableData[[thisStat$table]])) next
+      if (is.null(thisStat$codeValues)) next 
+      codedVarSym <- rlang::sym(thisStat$codedVar)
+      # choose just the records that match the codes of interest
+      codesOfInterest <- unlist(thisStat$codeValues)
+      thisTable <- tableData[[thisStat$table]]  %>%
+        filter(!!codedVarSym %in% codesOfInterest)
+    } else {
+      thisTable <- tableData[[thisStat$table]]
     }
-    if ("tblLTFU" %in% tablesAndVariables$tablesToCheck){
-      if ("DEATH_D" %in% names(tableData$tblLTFU)){
-        visitStats$deaths <- tableData$tblLTFU %>% select(PATIENT, DEATH_D) %>% 
-          filter(DEATH_D != dateIndicatingUnknown) %>% 
-          filter(!is.na(DEATH_D)) %>% 
-          distinct(PATIENT, .keep_all = TRUE) %>% 
-          filter(DEATH_D <= Sys.Date()) %>% 
-          mutate(Year1 = year(DEATH_D)) %>% 
-          mutate(Year = earlyYears(Year1)) %>% 
-          group_by(Year) %>% dplyr::summarize(Count = n()) %>% mutate(Variable = visitStatsToReport[[3]])
-      }
-      if ("DROP_D" %in% names(tableData$tblLTFU)){
-        if ("DROP_RS" %in% names(tableData$tblLTFU)){
-          visitStats$transferred <-tableData$tblLTFU %>% select(PATIENT, DROP_D, DROP_RS) %>% 
-            filter(DROP_RS %in% codesIndicatingTransfer) %>%  
-            filter(DROP_D != dateIndicatingUnknown) %>%
-            filter(!is.na(DROP_D)) %>% 
-            filter(DROP_D <= Sys.Date()) %>% 
-            mutate(Year1 = year(DROP_D)) %>% 
-            mutate(Year = earlyYears(Year1)) %>% 
-            group_by(Year) %>% dplyr::summarize(Count = n()) %>% mutate(Variable = visitStatsToReport[[4]])
-        }
-      }
-    }
-    if ("tblLAB_RNA" %in% tablesAndVariables$tablesToCheck){
-      visitStats$viralLoad <- tableData$tblLAB_RNA %>% select(PATIENT, RNA_D) %>% 
-        filter(RNA_D != dateIndicatingUnknown) %>%
-        filter(!is.na(RNA_D)) %>% 
-        filter(RNA_D <= Sys.Date()) %>% 
-        mutate(Year1 = year(RNA_D)) %>% 
-        mutate(Year = earlyYears(Year1)) %>% 
-        group_by(Year) %>% dplyr::summarize(Count = n()) %>% mutate(Variable = visitStatsToReport[[5]])
-    }
-    if ("tblLAB_CD4" %in% tablesAndVariables$tablesToCheck){
-      visitStats$CD4 <- tableData$tblLAB_CD4 %>% select(PATIENT, CD4_D) %>% 
-        filter(CD4_D != dateIndicatingUnknown) %>%
-        filter(!is.na(CD4_D)) %>% 
-        filter(CD4_D <= Sys.Date()) %>% 
-        mutate(Year1 = year(CD4_D)) %>% 
-        mutate(Year = earlyYears(Year1)) %>% 
-        group_by(Year) %>% dplyr::summarize(Count = n()) %>% mutate(Variable = visitStatsToReport[[6]])
-    }
+    
+    visitStatsVarSym <- rlang::sym(visitStatsVar)
+    
+    visitStats[[visitStatsVar]] <- tableData[[thisStat$table]]  %>% 
+      select(!!patientVarSym, !!visitStatsVarSym) %>% 
+      filter(! (!!visitStatsVarSym) %in% dateIndicatingUnknown) %>%
+      filter(!is.na(!!visitStatsVarSym)) %>% 
+      filter(!!visitStatsVarSym <= Sys.Date()) %>% 
+      mutate(Year1 = year(!!visitStatsVarSym)) %>% 
+      mutate(Year = earlyYears(Year1)) %>% 
+      group_by(Year) %>% dplyr::summarize(Count = n()) %>% 
+      mutate(Variable = thisStat$displayName)
+    
   }
+  # circle back around to removing duplicate records
+  
+  
+  # # this assumes enrolDateVar is not NULL in data model metadata project
+  # visitStats$enrol <- tableData[[indexTableName]]  %>% select(!!patientVarSym, !!enrolDateVarSym) %>% 
+  #   filter(! (!!enrolDateVarSym) %in% dateIndicatingUnknown) %>%
+  #   filter(!is.na(!!enrolDateVarSym)) %>% 
+  #   filter(!!enrolDateVarSym <= Sys.Date()) %>% 
+  #   mutate(Year1 = year(!!enrolDateVarSym)) %>% 
+  #   mutate(Year = earlyYears(Year1)) %>% 
+  #   group_by(Year) %>% dplyr::summarize(Count = n()) %>% mutate(Variable = visitStatsToReport[[1]])
+  # 
+  
+  # if (networkName == "IeDEA"){
+  #   # NEED TO CUSTOMIZE REPORT FOR OTHER DATA MODELS
+  #   if ("tblVIS" %in% tablesAndVariables$tablesToCheck){
+  #     visitStats$visits <- tableData$tblVIS %>% select(PATIENT, VIS_D) %>% 
+  #       filter(!VIS_D %in% dateIndicatingUnknown) %>%
+  #       filter(!is.na(VIS_D)) %>% 
+  #       distinct(PATIENT, VIS_D, .keep_all = TRUE) %>% 
+  #       filter(VIS_D <= Sys.Date()) %>% 
+  #       mutate(Year1 = year(VIS_D)) %>% 
+  #       mutate(Year = earlyYears(Year1)) %>% 
+  #       group_by(Year) %>% dplyr::summarize(Count = n()) %>% mutate(Variable = visitStatsToReport[[2]])
+  #   }
+  #   if ("tblLTFU" %in% tablesAndVariables$tablesToCheck){
+  #     if ("DEATH_D" %in% names(tableData$tblLTFU)){
+  #       visitStats$deaths <- tableData$tblLTFU %>% select(PATIENT, DEATH_D) %>% 
+  #         filter(!DEATH_D %in% dateIndicatingUnknown) %>% 
+  #         filter(!is.na(DEATH_D)) %>% 
+  #         distinct(PATIENT, .keep_all = TRUE) %>% 
+  #         filter(DEATH_D <= Sys.Date()) %>% 
+  #         mutate(Year1 = year(DEATH_D)) %>% 
+  #         mutate(Year = earlyYears(Year1)) %>% 
+  #         group_by(Year) %>% dplyr::summarize(Count = n()) %>% mutate(Variable = visitStatsToReport[[3]])
+  #     }
+  #     if ("DROP_D" %in% names(tableData$tblLTFU)){
+  #       if ("DROP_RS" %in% names(tableData$tblLTFU)){
+  #         visitStats$transferred <-tableData$tblLTFU %>% select(PATIENT, DROP_D, DROP_RS) %>% 
+  #           filter(DROP_RS %in% codesIndicatingTransfer) %>%  
+  #           filter(!DROP_D %in% dateIndicatingUnknown) %>%
+  #           filter(!is.na(DROP_D)) %>% 
+  #           filter(DROP_D <= Sys.Date()) %>% 
+  #           mutate(Year1 = year(DROP_D)) %>% 
+  #           mutate(Year = earlyYears(Year1)) %>% 
+  #           group_by(Year) %>% dplyr::summarize(Count = n()) %>% mutate(Variable = visitStatsToReport[[4]])
+  #       }
+  #     }
+  #   }
+  #   if ("tblLAB_RNA" %in% tablesAndVariables$tablesToCheck){
+  #     visitStats$viralLoad <- tableData$tblLAB_RNA %>% select(PATIENT, RNA_D) %>% 
+  #       filter(!RNA_D %in% dateIndicatingUnknown) %>%
+  #       filter(!is.na(RNA_D)) %>% 
+  #       filter(RNA_D <= Sys.Date()) %>% 
+  #       mutate(Year1 = year(RNA_D)) %>% 
+  #       mutate(Year = earlyYears(Year1)) %>% 
+  #       group_by(Year) %>% dplyr::summarize(Count = n()) %>% mutate(Variable = visitStatsToReport[[5]])
+  #   }
+  #   if ("tblLAB_CD4" %in% tablesAndVariables$tablesToCheck){
+  #     visitStats$CD4 <- tableData$tblLAB_CD4 %>% select(PATIENT, CD4_D) %>% 
+  #       filter(!CD4_D %in% dateIndicatingUnknown) %>%
+  #       filter(!is.na(CD4_D)) %>% 
+  #       filter(CD4_D <= Sys.Date()) %>% 
+  #       mutate(Year1 = year(CD4_D)) %>% 
+  #       mutate(Year = earlyYears(Year1)) %>% 
+  #       group_by(Year) %>% dplyr::summarize(Count = n()) %>% mutate(Variable = visitStatsToReport[[6]])
+  #   }
+  # }
 
 
   allData <- rbindlist(visitStats, use.names = TRUE, fill = TRUE)
@@ -234,7 +277,7 @@ createVisitStats <- function(tableData, reportFormat){
   visitStatsOut <- spread(allData, key = Year, Count, fill = 0)
   # arrange rows in desired order
   visitStatsOut$Variable <- factor(visitStatsOut$Variable, 
-                                   levels = visitStatsToReport,
+                                   levels = visitStatsOut$Variable,
                                    ordered = TRUE)
   # for newer version of packages:
   # visitStatsOut <- visitStatsOut %>% arrange(Variable) %>% rowwise() %>%  mutate(Total = sum(c_across(-Variable))) 
@@ -262,7 +305,7 @@ createVisitStats <- function(tableData, reportFormat){
 hiddenDatesMessage <- function(dates, lowerDate, upperDate){
   # eliminate missing date values and dates used to indicate unknown date values
   dates <- dates[!is.na(dates)]
-  dates <- dates[dates != as.Date(dateIndicatingUnknown)]
+  dates <- dates[!dates %in% as.Date(dateIndicatingUnknown)]
   
   # how many non-missing valid dates?
   numDates <- length(dates)
@@ -332,28 +375,29 @@ createPlotTitle <- function(groupName, detailedMessage){
 
 generateHistogramGrid <- function(tableData, groupName, dateFields){
   print("generateHistogramGrid")
-  tablesToInclude <- intersect(desiredTables, names(tableData))
+  # desiredPlotInfo is in json read in specificDefinitions
   dateDataset <- NULL
-  for (tableName in tablesToInclude){
+  for (dateVariable in dateFields){
+    thisPlot <- desiredPlotInfo[[dateVariable]]
+    tableName <- thisPlot$table
+    if (!tableName %in% names(tableData)) next
     print(tableName)
-    table <- get(tableName, tableData)
-    variablesToInclude <- intersect(desiredPlots, names(table))
-    if (length(variablesToInclude) == 0) next
-    for (dateVariable in variablesToInclude){
-      print(dateVariable)
-      datesInTable <- table %>% 
-        gather(!!dateVariable, key = "DateName", value = "Dates") %>% 
-        select("DateName", "Dates") 
-      dateDataset <- bind_rows(dateDataset, datesInTable)
-    }
+    thisTable <- get(tableName, tableData)
+    if (!dateVariable %in% names(thisTable)) next
+    
+    datesInTable <- thisTable %>% 
+      gather(!!dateVariable, key = "DateName", value = "Dates") %>% 
+      select("DateName", "Dates") 
+    dateDataset <- bind_rows(dateDataset, datesInTable)
   }
   
   # if no data to include, don't create a histogram
   if (is.null(dateDataset)) return(NULL)
   if (all(is.na(dateDataset$Dates))) return(NULL)
   
+  
   # ensure that histograms will be in desired order, as specified in dateFields
-  dateDataset$DateName = factor(dateDataset$DateName, levels=dateFields)
+  dateDataset$DateName = factor(dateDataset$DateName, levels = dateFields)
   
   dateRange <- "defaultRange"
   if (!is.null(input$histoRange)){
@@ -615,7 +659,6 @@ generateDatasetSummary <- function(tableData, reportFormat){
     row <- row + 1
   }
   tableSummary <- tableSummary %>% replace(is.na(.),0)
-  
   for (tableName in uploadList()$tablesWithNoPatientID){ #JUDY fix this when we know how to handle preg tables
     results <- tableData[[tableName]] %>% mutate(Table = tableName) %>% group_by(Table) %>% summarise(Records = n())  
     results <- as.data.frame(results)
@@ -747,11 +790,12 @@ resetHistoRange <- function(){
   if (is.null(input$histoRange)) return(NULL)
   if (input$histoRange == "defaultRange") return(NULL)
   # after reports are generated,
+
   updateSelectInput(
     session,
     "histoRange",
     "Choose years to include in histograms",
-    choices = c("Years: 2000 - present" = "defaultRange",
+    choices = c("Years: 2004 - present" = "defaultRange",
                 "Choose a custom range of years" = "chooseRange")
   )
 }
@@ -760,8 +804,8 @@ resetHistoRange <- function(){
 createReport <- function(file, reportType = c("PDF", "html"),
                          includeHistograms = input$includeHistograms,
                          includeDataSummary = input$includeDataSummary,
-                         includeErrorSummary = input$includeErrorSummary,
-                         datasetDesc = input$datasetDesc) {
+                         includeErrorSummary = input$includeErrorSummary){ #,
+                         #datasetDesc = input$datasetDesc) {
   cat("createReport output file: ", file, "\n", sep = "", file = stderr())
   print("in createreport")
   if (includeHistograms){
@@ -783,8 +827,11 @@ createReport <- function(file, reportType = c("PDF", "html"),
   # JUDY edit the line below if you want colored badges in the reports along with table names
   tableOfVariables$Table <- removeHTML(tableOfVariables$Table)
   
-  # the 3rd column is titled with the network name and data model name
-  tableOfVariables[[3]] <- removeHTML(tableOfVariables[[3]])
+  numColumns <- length(tableOfVariables)
+  for (colNum in 2:numColumns){
+    tableOfVariables[[colNum]] <- removeHTML(tableOfVariables[[colNum]])
+  }
+
 
     # if every patient in the index table is found in the other patient-linked
   # tables, no need to show an all-green heat map, just a statement:
@@ -814,7 +861,7 @@ createReport <- function(file, reportType = c("PDF", "html"),
     unknownCodeSummaryByGroup = errorTable()$unknownCodeSummaryByGroup,
     appearanceSummary = appearanceSummary,
     errorTable = errorTable(),
-    datasetDesc = input$datasetDesc,
+#    datasetDesc = input$datasetDesc,
     plotList = plotList,
     includeDataSummary = includeDataSummary,
     includeHistograms = includeHistograms,
@@ -931,7 +978,7 @@ createReportOneProgram <- function(file, input, groupName){
     datasetSummary = datasetSummary,
     datasetQuality = datasetQuality,
     programSummary = programSummary,
-    datasetDesc = input$datasetDesc,
+    # datasetDesc = input$datasetDesc,
     p = p,
     includeDataSummary = input$includeDataSummary,
     includeHistograms = input$includeHistograms,
@@ -1047,7 +1094,9 @@ createMetricsReport <- function(file) {
     dqHeatmaps = dqHeatmaps$heatmapList,
     codedDqHeatmaps = dqHeatmaps$codedHeatmap,
     tocFlag = tocFlag,
-    reportDesc = input$reportDesc
+    networkName = networkName,
+    datamodelName = projectDef$datamodel_name,
+    datamodelAbbr = projectDef$datamodel_abbrev
   )
   tempReportName <-  paste0("reportdqmetrics.rmd")
   dir <- dirname(file)

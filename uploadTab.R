@@ -330,6 +330,13 @@ dataRequestInfo <- reactive({
     )
     
     requestedFormats <- concept()$requestedFormats
+    # remind user that CSV is always an accepted alternative
+    if (!"csv" %in% tolower(requestedFormats)){
+      if (length(requestedFormats) == 1){
+        requestedFormats <- paste0(requestedFormats, " (preferred)")
+      }
+      requestedFormats <- c(requestedFormats, "CSV (always allowed)")
+    }
     
     box(
       width = 10,

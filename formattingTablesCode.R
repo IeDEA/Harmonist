@@ -1,4 +1,8 @@
 calcAge <- function(dob, age.day = today(), units = "years", floor = TRUE) {
+  # if dob is actually YEAR instead of date, assume middle of year:
+  if (is.numeric(dob) && dob < 2500){
+    dob <- as.Date(paste0(dob, "-07-01"))
+  }
   calc.age = interval(dob, age.day) / duration(num = 1, units = units)
   if (floor) return(as.integer(floor(calc.age)))
   return(calc.age)
@@ -147,7 +151,7 @@ forceModeTables <- function(groupByVar, uploadedTables){
         # NUMERIC CODES FIRST ---------------------------------------------------------------
         # if the code list is numeric, convert column to numeric
         if (codeFormat == "Numeric"){
-          # this will allow 93.0 and 93 to be the same code
+          # this will allow 93.0 and 93 to be the same code, but ART_RS is "character" code so only 93 is acceptable
           validCodes <- as.numeric(validCodes)
           # if the uploaded data is already in numeric format, indicate missing and then invalid codes will be NA
           if (is.numeric(formattedTables[[tableName]][[variableName]])){

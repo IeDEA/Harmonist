@@ -50,7 +50,7 @@ library(purrr)
 library(htmltools)
 library(data.table)
 library(REDCapR)
-
+library(dotenv)
 # global variable to track size of uploaded files so that users can be warned when application busy
 usage <- list()
 
@@ -171,16 +171,21 @@ shinyUI <- dashboardPage(
      if (file.exists("google-analytics.txt")) {
        includeHTML("google-analytics.txt")
      }
+    ),
+    # css to force error detail modal boxes to be wide enough to show content
+    tags$style(
+      type = 'text/css',
+      '.modal-dialog.errdetail { width: fit-content !important; }'
     )
   )
 )
 
 shinyServer <- function(input, output, session){
 
-  # JUDY revisit this: is it necessary? pull from REDCap
-  toReport <- rjson::fromJSON(file = "datasetSummary.json") 
-  
   sessionID <- reactive(session$token)
+  
+  # code to compile lists and tables of uploaded files and variables
+  source("uploadDetails.R", local = TRUE)
   
   # code to match uploaded data with data model
   source("formattingTablesCode.R", local = TRUE)
@@ -198,17 +203,14 @@ shinyServer <- function(input, output, session){
   
   source("REDCapHelpers.R", local = TRUE)
   source("modalFunctions.R", local = TRUE)
-  source("dataQuality.R", local = TRUE)
   source("dateChecking.R", local = TRUE)
   source("dataChecks.R", local = TRUE)
   source("dateComparisons.R", local = TRUE)
-  source("dataQuality.R", local = TRUE)
-  source("reportGenerationOptions.R", local = TRUE)
   
-  #### IeDEA-specific data checks #####
-  source("iedeaDataChecks.R", local = TRUE)
+  source("dataQuality.R", local = TRUE)
   
   # code for report generation ---------------------------------------
+  source("reportGenerationOptions.R", local = TRUE)
   source("downloadReports.R", local = TRUE)
   source("downloadErrorDetails.R", local = TRUE)
   
@@ -352,7 +354,7 @@ shinyServer <- function(input, output, session){
     if (invalidToken){
       # ask steph here about modal
       errorMessageModal(messageHeader = "Invalid or expired Toolkit token",
-                        message = "Please log in to the IeDEA Hub again and choose Upload Data.", 
+                        message = "Please log in to the Hub again and choose Upload Data.", 
                         secondaryMessage = "You may also continue this session without access to data submission option")
       updateTabItems(session,"tabs", "welcome")
       return(NULL)
@@ -945,6 +947,8 @@ shinyServer <- function(input, output, session){
       myfile <- as.data.frame(myfile)
       # determine if any of the column names include non-alphabetic characters
       # because later code will crash with strange characters
+      cleanColNames <- str_replace_all(names(myfile), " ", "")
+      names(myfile) <- cleanColNames
       badColumns <- which(grepl("\\W", names(myfile)))
       names(myfile)[badColumns] <- paste0(iconv(names(myfile)[badColumns], from = "", to = "ASCII",""),
                                           "_INVALID_CHARACTERS_IN_VARIABLE_NAME")
@@ -1166,6 +1170,11 @@ shinyServer <- function(input, output, session){
     missingColsRequested <- list()
     missingColsRequestedFormatted <- NULL
     missingVariableCount <- 0
+    
+    # keep track of variables that were shared but not requested
+    colsNotRequested <- list()
+    notRequestedCount <- 0
+    
     for (tableName in uploadList()$AllDESTables){
       result <- readOneTable(tableName)
       # if error encountered in reading file
@@ -1209,6 +1218,7 @@ shinyServer <- function(input, output, session){
       missingColsRequestedFormatted[[tableName]] <- tags$li(span(tableName, class = tableLabelClass),
                                                     paste0("Table missing (", numberMissing, " variables)"))
     }
+    
     # put missingColsRequested in order of DES
     allTableNames <- names(tableOrder)
     theseTablesInOrder <- allTableNames[allTableNames %in% names(missingColsRequested)]
@@ -1278,7 +1288,9 @@ shinyServer <- function(input, output, session){
       resetFileInput$reset <- TRUE
       return(NULL)
     }
-    
+      
+      
+      
     # summarize info about uploaded tables and variables and store in reactive variable 
     # to be used in reports and upload summary tab
     tablesAndVariables$blankTables <- blankTables
@@ -1292,7 +1304,12 @@ shinyServer <- function(input, output, session){
     tablesAndVariables$missingConceptColumnsFormatted <- missingColsRequestedFormatted
     tablesAndVariables$missingConceptColumns <- missingColsRequested
     tablesAndVariables$missingVariableCount <- missingVariableCount
-    results <- createListsOfTablesAndVariables(uploaded, tableDef)
+    if (hubInfo$fromHub){
+      results <- createListsOfTablesAndVariablesHub(uploaded, tableDef)
+    } else {
+      results <- createListsOfTablesAndVariablesNoHub(uploaded, tableDef)
+    }
+    
     tablesAndVariables$details <- results
     postProgress(list(action_step = "read_files", 
                       des_variables = as.character(jsonlite::toJSON(results$des_variables)),
@@ -1322,7 +1339,12 @@ shinyServer <- function(input, output, session){
       numPrograms = numPrograms,
       otherGroupOptions = otherGroupOptions
     )
+
     extraVars <- tablesAndVariables$details$non_des_variables[[indexTableName]]
+    # exclude columns with strange characters in name
+    extraVars <- extraVars[which(!endsWith(extraVars, "_INVALID_CHARACTERS_IN_VARIABLE_NAME"))]
+    # take one extra step to confirm extraVars are truly column names of index table
+    extraVars <- intersect(extraVars, names(indexTable))
     # unique to IeDEA
     if ("CENTER" %in% names(indexTable)) {
       extraVars <- c(extraVars, "CENTER")
@@ -1533,7 +1555,7 @@ shinyServer <- function(input, output, session){
       
       
       menuItem("Visualize data", 
-               tabName = "interactivePlots", icon = icon("bar-chart")),
+               tabName = "interactivePlots", icon = icon("chart-bar")),
       menuItem("Help", tabName = "help", icon = icon("question-circle")),
       menuItem("Provide feedback", tabName = "feedback", icon = icon("envelope")),
       menuItem("", tabName = "changelog")

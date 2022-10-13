@@ -15,7 +15,6 @@ params:
   datasetSummary: "datasetSummary"
   datasetQuality: "datasetQuality"
   programSummary: "programSummary"
-  datasetDesc: "datasetDesc"
   p: "p"
   includeDataSummary: "includeDataSummary"
   includeHistograms: "includeHistograms"
@@ -43,9 +42,9 @@ if (userDetails$uploaduser_id == ""){
   regionMessage <- NULL
 } else regionMessage <- paste0("from Region ", params$region)
 
-if (!(params$datasetDesc=="")){
-  datasetLabel <- params$datasetDesc
-} else {datasetLabel <- NULL}
+# if (!(params$datasetDesc=="")){
+#   datasetLabel <- params$datasetDesc
+# } else {datasetLabel <- NULL}
 
 ```
 \centering
@@ -55,8 +54,6 @@ if (!(params$datasetDesc=="")){
 `r headerMessage` `r regionMessage`
 
 Report date: `r Sys.Date()`
-
-`r datasetLabel` 
 
 Total number of patients from Program `r program` in dataset: `r params$datasetSummary$totalPatients`
 

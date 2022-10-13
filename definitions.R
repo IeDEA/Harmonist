@@ -92,18 +92,17 @@ enrolDateVarSym <- rlang::sym(enrolDateVar)
 
 # Set height variable name
 heightTableName <- projectDef$height_table
-heightTableNameSym <- rlang::sym(heightTableName)
-
-result <- splitVarName(projectDef$height_var, expectedTableName = heightTableName)
-heightVar <- result$varName
-heightVarSym <- rlang::sym(heightVar)
-
-# Set height date variable name
-result <- splitVarName(projectDef$height_date, expectedTableName = heightTableName)
-heightDateVar <- result$varName
-heightDateVarSym <- rlang::sym(heightDateVar)
-
-
+if (!is.null(heightTableName)){
+  heightTableNameSym <- rlang::sym(heightTableName)
+  result <- splitVarName(projectDef$height_var, expectedTableName = heightTableName)
+  heightVar <- result$varName
+  heightVarSym <- rlang::sym(heightVar)
+  
+  # Set height date variable name
+  result <- splitVarName(projectDef$height_date, expectedTableName = heightTableName)
+  heightDateVar <- result$varName
+  heightDateVarSym <- rlang::sym(heightDateVar)
+}
 # Set start date suffix (i.e. _SD)
 sdExt <- projectDef$sd_ext
 
@@ -142,9 +141,9 @@ if (numAgeGroups > 0){
 
 
 
-# columns in error detail report:
-idFieldNames <- c("id1_field","id2_field", "id3_field")
-idValueNames <- c("id1","id2", "id3")
+# columns in error detail report: NOTE THAT THIS LIMITS composite identifiers to 5
+idFieldNames <- c("id1_field","id2_field", "id3_field", "id4_field", "id5_field")
+idValueNames <- c("id1","id2", "id3", "id4", "id5")
 
 # minimum info to add to errorFrame when error detected
 minimumErrorDetail <- c("category", "error_field", "error", "description",	"severity")
@@ -240,7 +239,7 @@ allRequiredVariables <- unique(
 
 
 # report definitions ---------------------------------------------------------------
-minYearForHistograms <- 2000 # lower limit of dates to display 
+minYearForHistograms <- 2004 # lower limit of dates to display 
 # for plots
 xAxisLabelAngle <- 45
 
@@ -265,10 +264,17 @@ HEATMAPCOLORS <- c(RED_0, RED_20, ORANGE_50, YELLOW_80, LTGREEN_99, GREEN_100, B
 
 # Date order checks in IeDEA - store somewhere else?
 # IeDEA-specific plausible limits ------------------------------------------
+#test <- downloadREDCapFile("numericLimits.json", tokenForHarmonist0C, 1, "numericlimits")
 numericLimits <- rjson::fromJSON(file = "numericLimits.json")
+#test <- downloadREDCapFile("globalDateBeforeChecks.json", tokenForHarmonist0C, 1, "globaldatebefore")
 globalDateBeforeChecks <- rjson::fromJSON(file = "globalDateBeforeChecks.json")
+#test <- downloadREDCapFile("globalDateAfterChecks.json", tokenForHarmonist0C, 1, "globaldateafter")
 globalDateAfterChecks <- rjson::fromJSON(file = "globalDateAfterChecks.json")
+
+#test <- downloadREDCapFile("withinTableDateOrder.json", tokenForHarmonist0C, 1, "withintabledates")
 dateOrders <- rjson::fromJSON(file = "withinTableDateOrder.json") # other than _ed/_sd
+#test <- downloadREDCapFile("datasetSummary.json", tokenForHarmonist0C, 1, "datasetsummary")
+toReport <- rjson::fromJSON(file = "datasetSummary.json") 
 
 # data uploading -- file types allowed
 validFileTypes <- c("csv", "sas7bdat", "dta", "sav", "rds")
