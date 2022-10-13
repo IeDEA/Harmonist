@@ -1,0 +1,32 @@
+{
+  "ENROL_D":
+  {
+    "table":"tblBAS",
+    "displayName": "Enrolled"
+  },
+  "VIS_D":
+  {
+    "table": "tblVIS",
+    "displayName": "Visits"
+  },  
+  "ART_SD":
+  {
+    "table": "tblART",
+    "displayName": "ART Med"
+  },
+  "CD4_D":
+  {
+    "table": "tblLAB_CD4",
+    "displayName": "CD4 Measurement"
+  },
+  "RNA_D":
+  {
+    "table": "tblLAB_RNA",
+    "displayName": "Viral Load"
+  },
+  "DIS_D":
+  {
+    "table": "tblDIS",
+    "displayName": "Disease Diagnosis"
+  }
+}
