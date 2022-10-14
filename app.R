@@ -56,7 +56,7 @@ usage <- list()
 
 source("server_name.R", local = TRUE)
 source("redcapTokens.R", local = TRUE)
-source("awsKey.R", local = TRUE)
+#source("awsKey.R", local = TRUE) Only relevant for installations with submit option
 source("helpers.R", local = TRUE)
 source("REDCapURL.R", local = TRUE)
 source("REDCapCore.R", local = TRUE)
