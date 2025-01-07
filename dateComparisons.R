@@ -74,8 +74,13 @@ globalDateChecksBefore <- function(errorFrame, resources){
   
   # find *before* global date fields present in dataset, store in checkTheseGlobalDates
   globalChecks <- globalDateBeforeChecks
-  checkTheseGlobalDates <- intersect(names(globalChecks), 
+  if (separateDateVars){
+    checkTheseGlobalDates <- intersect(names(globalChecks), 
+                                     paste0(unlist(resources$tablesAndVariables$matchingColumns, use.names = FALSE), "_CALCDATE"))
+  } else {
+    checkTheseGlobalDates <- intersect(names(globalChecks), 
                                      unlist(resources$tablesAndVariables$matchingColumns, use.names = FALSE))
+  }
   
   for (globalDateName in checkTheseGlobalDates){
     print(globalDateName)
@@ -152,6 +157,7 @@ globalDateChecksBefore <- function(errorFrame, resources){
             !(exists(paste0(secondDate, projectDef$date_approx), badDates))
           )
         ){
+
           errorFrame <- addToErrorFrame(resources$formattedTables[[indexTableName]],
                                         resources$finalGroupChoice,
                                         errorFrame, 
@@ -161,7 +167,7 @@ globalDateChecksBefore <- function(errorFrame, resources){
                                         error_field2 = firstDate, 
                                         error2 = as.character(resources$uploadedTables[[table1Name]][badDates$recordIndex1,firstDate]),
                                         errorCode = "2.1")
-          
+
         } else {
           errorFrame <- generalDateOrder(resources,
                                          resources$finalGroupChoice,
@@ -185,8 +191,15 @@ globalDateChecksAfter <- function(errorFrame, resources){
   } 
   # find *after* global date fields present in dataset, store in checkTheseGlobalDates
   globalChecks <- globalDateAfterChecks
-  checkTheseGlobalDates <- intersect(names(globalChecks),
-                                     unlist(resources$tablesAndVariables$matchingColumns, use.names = FALSE))
+  if (separateDateVars){
+    checkTheseGlobalDates <- intersect(names(globalChecks), 
+                                       paste0(unlist(resources$tablesAndVariables$matchingColumns, use.names = FALSE), "_CALCDATE"))
+  } else {
+    
+    checkTheseGlobalDates <- intersect(names(globalChecks), 
+                                       unlist(resources$tablesAndVariables$matchingColumns, use.names = FALSE))
+  }
+
   for (globalDateName in checkTheseGlobalDates){
     print(globalDateName)
     # read in details about this global date field, such as table name, exceptions

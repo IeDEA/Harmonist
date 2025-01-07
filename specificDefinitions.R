@@ -1,6 +1,6 @@
 # These variables will be unique to the research network
 
-AWS_bucket_name <- "shiny-app-test" # change - should be in 0C?
+AWS_bucket_name <- " " # change - should be in 0C?
 
 datesInFuture <- "NEXT_VISIT_D"
 dateIndicatingUnknown <- c("1911-11-11") 

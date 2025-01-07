@@ -263,7 +263,10 @@ checkCodedVariables <- function(errorFrame, resources){
       if (any(badCodeIndices, na.rm = TRUE)){
         indices <- formattedTable$recordIndex[which(badCodeIndices)]
         badCodesRecords <- table[indices, unique(c(tableIDField[[tableName]], codedField))]
-        badCodesRecords[[groupBy]] <- formattedTable[which(badCodeIndices), groupBy]
+        # if the coded field *is* the grouping variable, don't replace groupby with Invalid Code
+        if (codedField != groupBy){
+          badCodesRecords[[groupBy]] <- formattedTable[which(badCodeIndices), groupBy]
+        }
         
         if (length(validCodes) > maxCodesToShow){
           message <- paste0("This code is not found in the DES for ", codedField, ".")
@@ -344,7 +347,7 @@ checkValidRange <- function(errorFrame, groupVar, tableName, formattedTable, num
                                   errorFrame = errorFrame, 
                                   field = numericField, tableName = tableName, 
                                   errorType = "Value Above Expected Range",
-                                  errorCode = "2.2c", severity = "Error",
+                                  errorCode = "2.2c", severity = severity,
                                   message = message, 
                                   quantity = nrow(tooHighRecords))
     
@@ -427,8 +430,9 @@ findMissingRequiredValues <- function(errorFrame, resources){
     requiredVariables <- findVariablesMatchingCondition(tableName, tableDef, "variable_required", "1")
     
     for (fieldName in requiredVariables){
-      if (networkName == "IeDEA"){
-         if (fieldName %in% requiredAtBaseline)  next # in specific definitions, only required at baseline SRN
+      if (networkName == "IeDEA" && startsWith(tableName, "sup")){ # is this one of the sup... prospective study tables?
+        if (fieldName %in% requiredAtBaseline[[tableName]])  next # in specific definitions, only required at baseline 
+        if (startsWith(fieldName, "redcap_repeat")) next # redcap_repeat_instance and redcap_repeat_instrument can be blank
       }
 
       print(paste0("checking missing ", fieldName, Sys.time()))
@@ -569,7 +573,7 @@ summarizeMissingByGroup <- function(groupVar, errorFrame, resources, summaryFram
   # errorFrame already documents missing *required* variables; summarize them here if they exist:
   if (!is_empty(errorFrame) && ("Missing Required Variable" %in% errorFrame$category)){
     missingSummary[["required"]] <- errorFrame %>% filter(category == "Missing Required Variable") %>% 
-      filter(!(!! rlang::sym(groupVar) %in% c("Unknown", "Invalid")) ) %>% 
+      filter(!(!! rlang::sym(groupVar) %in% c("Unknown", "Invalid", missingCode)) ) %>% 
       group_by_at(vars((!! rlang::sym(groupVar)), table, error_field)) %>% 
       summarise(number = sum(quantity)) %>% ungroup() %>%
       left_join(rowsByGroup, by = c("table", groupVar)) %>% 
@@ -599,7 +603,7 @@ summarizeMissingByGroup <- function(groupVar, errorFrame, resources, summaryFram
       
       # if this is a coded variable, missing entries are labeled "Missing", otherwise, check for blank or NA
       if (tableDef[[tableName]][["variables"]][[fieldName]]$has_codes == "Y"){
-        badRecords <- resources$formattedTables[[tableName]][[fieldName]] == "Missing"
+        badRecords <- resources$formattedTables[[tableName]][[fieldName]] == missingCode #"Missing"
       } else {
         badRecords <- is_blank_or_NA_elements(uploadedTable[[fieldName]])
       }
@@ -632,7 +636,7 @@ summarizeUnknownCodesByGroup <- function(groupVar, resources){  ## do this with 
     if (!exists(groupVar, resources$formattedTables[[tableName]])) next
     numRowsByGroup <- resources$tableRowsByGroup[[tableName]]
     table <- resources$formattedTables[[tableName]] %>% 
-      filter( !(!!rlang::sym(groupVar)) %in% c("Unknown", "Invalid") )
+      filter( !(!!rlang::sym(groupVar)) %in% c("Unknown", "Invalid code", missingCode) )
     if (nrow(table) == 0) next
     variablesInTable <- names(table)
     codedFieldNames <- intersect(variablesInTable,
@@ -646,7 +650,7 @@ summarizeUnknownCodesByGroup <- function(groupVar, resources){  ## do this with 
     for (codedField in variablesWorthCheckingForUnknown) {
       if (any(tolower(table[[codedField]])=="unknown", na.rm = TRUE)){
         unknownCodesByGroup[[codedField]] <- table %>% 
-          filter(!!rlang::sym(codedField) == "Unknown") %>% 
+          filter(!!rlang::sym(codedField) %in% c("Unknown", "missing")) %>% 
           group_by(!! rlang::sym(groupVar)) %>% summarise(number = n()) %>% 
           ungroup() %>% 
           left_join(numRowsByGroup, by = groupVar) %>% 
@@ -766,6 +770,60 @@ duplicateRecordChecks <- function(errorFrame, resources){
 }
 
 
+duplicateEntireRecordChecks <- function(errorFrame, resources){
+  print("entire record duplicate check")
+  groupVar <- resources$finalGroupChoice
+  for (tableName in resources$tablesAndVariables$tablesToCheck[resources$tablesAndVariables$tablesToCheck %in% duplicateRecordExceptions]){
+    print(paste0("checking for duplicates in ", tableName))
+    desFields <- tablesAndVariables$matchingColumns[[tableName]]
+    # if there is only one identifier in this table, doesn't work to use [, desFields] and keep
+    # name of column. If more than one, works fine
+    if (length(desFields) == 1){
+      table <- tibble(resources$uploadedTables[[tableName]][desFields])
+    } else {
+      table <- tibble(resources$uploadedTables[[tableName]][, desFields])
+    }
+    if (uniqueN(table) == nrow(table)){
+      # this means there are no duplicate combinations of key identifiers
+      next
+    }
+    print(paste0("before dupRows", Sys.time()))
+    # quantity = the number of rows that are DUPLICATES of a previous row - 
+    # subtract the original row from the count
+    duplicates <- table %>% group_by_all() %>% summarise(quantity = n() - 1) %>%
+      ungroup() %>% filter(quantity > 0)
+    print(paste0("after dupRows", Sys.time()))
+    
+    if (nrow(duplicates) == 0) { 
+      print("IT IS POSSIBLE TO GET HERE")
+      next
+    }
+    print("Duplicate rows found")
+    print(nrow(duplicates))
+    # we know there are duplicates
+    # check first for tables with patientVar as unique identifier; a duplicate record in that case 
+    # is an error that requires explanation
+
+    errorCode <- "1.8a"
+    message <- "This record is a complete duplicate of other record(s) in the table."
+    severity <- "Warning"
+    
+    idFields <- tableIDField[[tableName]]
+    
+    errorFrame <- addToErrorFrame(resources$formattedTables[[indexTableName]],
+                                  resources$finalGroupChoice, errorFrame, 
+                                  duplicates, 
+                                  idFields[1], tableName, 
+                                  "Duplicate Row", 
+                                  errorCode = errorCode, 
+                                  severity = severity, 
+                                  message)
+    print("finished adding duplicates ")
+  }
+  return(errorFrame)
+}
+
+
 
 checkForDecreasingHeight <- function(errorFrame, resources) {
   
@@ -873,7 +931,10 @@ summarizeErrors <- function(errorFrame, tableData){
       rename(variable = error_field) %>% 
       # put in table order and variable order
       mutate(tableOrder = as.numeric(tableDef[[table]][["table_order"]])) %>% 
-      mutate(varOrder = as.numeric(tableDef[[table]][["variables"]][[variable]][["variable_order"]])) %>%
+      mutate(varOrder = ifelse(
+        variable %in% names(tableDef[[table]][["variables"]]),
+        as.numeric(tableDef[[table]][["variables"]][[variable]][["variable_order"]]),
+        20))%>%
       arrange(tableOrder, varOrder) %>% 
       select(-varOrder, -tableOrder) %>% ungroup()
     
@@ -902,7 +963,12 @@ invalidProgram <- function(errorFrame, resources){
   if ( (defGroupVar %in% names(resources$uploadedTables[[indexTableName]]))
        & (defGroupTableName %in% resources$tablesAndVariables$tablesToCheck) ){
     # if you get to this point there is at least one complete entry for defGroupVar in defGroupTable but to be on the safe side...
-    validPrograms <- na.omit(unique(resources$formattedTables[[defGroupTableName]][[defGroupVar]]))
+    if (defGroupVar == "CENTER_LAST"){
+      validPrograms <- na.omit(unique(resources$formattedTables[[defGroupTableName]][["CENTER"]]))
+    } else {
+      validPrograms <- na.omit(unique(resources$formattedTables[[defGroupTableName]][[defGroupVar]]))
+    }
+    
     if (length(validPrograms) == 0){
       return(errorFrame)
     }
@@ -994,28 +1060,42 @@ sumThem <- function(x,y){
 
 
 combineMissingAndUnknownByGroup <- function(missing, unknown, groupVar){
-  if (is_empty(missing) || is_empty(unknown)) return(NULL)
-  summary <- full_join(missing, unknown, by=c(groupVar,"table","variable")) %>% 
-    mutate(category = "missingOrUnknown") %>% 
-    mutate(number = sumThem(number.x,number.y)) %>% 
-    mutate(percent = sumThem(percent.x,percent.y)) %>% 
-    select(-ends_with(".x")) %>% select(-ends_with(".y")) %>% 
+  if (is_empty(missing) && is_empty(unknown)) return(NULL)
+  if (!is_empty(missing) && !is_empty(unknown)){
+    summary <- full_join(missing, unknown, by=c(groupVar,"table","variable")) %>% 
+      mutate(category = "missingOrUnknown") %>% 
+      mutate(number = sumThem(number.x,number.y)) %>% 
+      mutate(percent = sumThem(percent.x,percent.y)) %>% 
+      select(-ends_with(".x")) %>% select(-ends_with(".y")) 
+  } else if (is_empty(unknown)){
+    summary <- missing
+  } else if (is_empty(missing)){
+    summary <- unknown
+  } 
+  summary <- summary %>% 
     filter(variable %in% c(interesting,allRequiredVariables)) %>% 
-    filter(!!rlang::sym(groupVar) != "Missing")
+    filter(!!rlang::sym(groupVar) != missingCode) # "Missing")
   
   return(summary)
 }
 
 combineMissingAndUnknown <- function(missing, unknown){ 
-  if (is_empty(missing) || is_empty(unknown)) return(NULL)
-  combined <- merge(missing, unknown,by=c("table","variable"), suffixes = c(".x",".y"), all = TRUE)
-  combined$category.x[is.na(combined$category.x)] <- ""
-  combined$category.y[is.na(combined$category.y)] <- ""
-  summary <- combined[,c("table","variable")]
-  summary$category <- trimws(paste(combined$category.x,combined$category.y))
-  summary$category[nchar(summary$category) > 8] <- "Missing or Unknown"
-  summary$number <- as.integer(rowSums(combined[,c("number.x", "number.y")], na.rm = TRUE))
-  summary$percent <- rowSums(combined[,c("percent.x", "percent.y")], na.rm = TRUE)
+
+  if (is_empty(missing) && is_empty(unknown)) return(NULL)
+  if (!is_empty(missing) && !is_empty(unknown)){
+    combined <- full_join(missing, unknown,by=c("table","variable"))
+    combined$category.x[is.na(combined$category.x)] <- ""
+    combined$category.y[is.na(combined$category.y)] <- ""
+    summary <- combined[,c("table","variable")]
+    summary$category <- trimws(paste(combined$category.x,combined$category.y))
+    summary$category[nchar(summary$category) > 8] <- "Missing or Unknown"
+    summary$number <- as.integer(rowSums(combined[,c("number.x", "number.y")], na.rm = TRUE))
+    summary$percent <- rowSums(combined[,c("percent.x", "percent.y")], na.rm = TRUE)
+  } else if (is_empty(missing)){
+    summary <- unknown
+  } else if (is_empty(unknown)){
+    summary <- missing
+  }
   summary <- summary %>% filter(variable %in% c(interesting,allRequiredVariables))
   return(summary)
 }

@@ -7,7 +7,7 @@ dateErrorType <- list(
   "_D_A" = "Conflict between date and date approximation"
 )
 dateErrorDesc <- list(
-  "format" = "Date format must be YYYY-MM-DD.",
+  "format" = "Date must be valid, date format must be YYYY-MM-DD.",
   "future" = "This date is in the future.",
   "earlyDate" = paste0("Dates (other than ", birthDateVar, ") are expected to be after ", year(minimumExpectedDate), "."),
   "earlyBIRTH_D" = paste0("Patient ", birthDateVar, " is expected to be after ", year(minimumExpectedBirthDate), "."),
@@ -95,7 +95,7 @@ findDatesOutOfRange <- function(resources, groupVar, errorFrame, table, formatte
       # now check for dates that seem earlier than expected range, first BIRTH_D then other dates
       # 
   if (networkName == "NA-ACCORD"){
-    actualBirthDateVar <- paste0(birthDateVar, "_CALCDATE")
+    actualBirthDateVar <- paste0(birthDateVar, "_YMD")
   } else {
     actualBirthDateVar <- birthDateVar
   }

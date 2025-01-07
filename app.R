@@ -14,9 +14,12 @@
 #   Version 1: August 10, 2017
 #   Version 2 (including integration with Hub): March 2019
 #   Version 3: Generalized to other data models: May 2021
-#   Version 3.1: Added data quality checks for IeDEA Sentinal Research Network
+#   Version 3.1: Added data quality checks for IeDEA Sentinel Research Network
 #   Version 3.2: Added logic to automatically retrieve latest version of JSON for data model, code list, and project info
 #   
+# HEPSANET customized version: 2024-07-30
+# For this version, sourcing AWS key is commented out, along with library (aws.s3),
+# since no dataset transfer is part of the application currently
 
 # check folder permissions for project files
 # NOTE: file.access is a pretty weird function and returns 0 for success
@@ -39,7 +42,7 @@ library(DT)
 library(tidyverse)
 library(ggplot2)
 library(plotly)
-library(aws.s3)
+#library(aws.s3)
 library(cowplot)
 library(httr)
 library(jsonlite)
@@ -49,20 +52,21 @@ library(filesstrings)
 library(purrr)
 library(htmltools)
 library(data.table)
-library(REDCapR)
-library(dotenv)
+
 # global variable to track size of uploaded files so that users can be warned when application busy
 usage <- list()
 
 source("server_name.R", local = TRUE)
 source("redcapTokens.R", local = TRUE)
-#source("awsKey.R", local = TRUE) Only relevant for installations with submit option
+#source("awsKey.R", local = TRUE)
 source("helpers.R", local = TRUE)
+source("specificHelpers.R", local = TRUE)
 source("REDCapURL.R", local = TRUE)
 source("REDCapCore.R", local = TRUE)
 source("definitions.R", local = TRUE)
 # specificDefinitions should be edited to match current research network specs
 source("specificDefinitions.R", local = TRUE)
+
 
 # source("otherVisitStats.R", local = TRUE) add when ready to add more report features
 
@@ -77,13 +81,16 @@ busyAnnounce <- read_file("busyAnnounce.html")
 # appBusy will be TRUE when the application not responsive due to calculations
 appBusy <- FALSE
 
-fields <- c("version_num")
-    changelogVersion <- redcap_read_oneshot(redcap_uri = redcap_url,
-                                token = tokenForHarmonistChangelog,
-                                fields = fields)$data
-    sorted_versions <- sort(changelogVersion$version_num, decreasing = TRUE)
-    current_version <- toString(sorted_versions[1])
-    versionLinkText <- paste("Harmonist Data Toolkit Version ", current_version)
+changelogVersion <- getAllRecords(tokenForHarmonistChangelog, 'HarmonistChangelog', 
+                                  fields = 'version_num')
+if (inherits(changelogVersion, "postFailure")){
+  versionLinkText <- "" # to hide link if REDCap isn't responding
+} else {
+  changelogVersion <- rbindlist(changelogVersion, fill=TRUE)
+  sorted_versions  <- sort(changelogVersion$version_num, decreasing = TRUE)
+  current_version  <- toString(sorted_versions[1])
+  versionLinkText  <- paste("Harmonist Data Toolkit Version ", current_version)
+}
     
 shinyUI <- dashboardPage(
 
@@ -123,13 +130,7 @@ shinyUI <- dashboardPage(
       ),
       tabItem(tabName = "upload",
               fluidPage(
-                uiOutput("tooBusyMessage"),
-                uiOutput("uploadIntro"),
-                uiOutput("dataRequestInfo"),
-                uiOutput("uploadMissingSummary"),
-                uiOutput("uploadFileFormatError"),
-                uiOutput("uploadSummary"),
-                uiOutput("selectFiles")
+                uiOutput("uploadPage")
               )
       ),
       tabItem(tabName = "reviewerror",
@@ -155,9 +156,6 @@ shinyUI <- dashboardPage(
               ),
       tabItem(tabName = "help",
               uiOutput("helpTabUI")
-              ),
-      tabItem(tabName = "feedback",
-              uiOutput("feedbackTabUI")
               ),
       tabItem(tabName = "changelog",
               uiOutput("changelogTabUI")
@@ -197,7 +195,6 @@ shinyServer <- function(input, output, session){
   source("summaryReportsTab.R", local = TRUE)
   source("submitTab.R", local = TRUE)
   source("helpTab.R", local = TRUE)
-  source("feedbackTab.R", local = TRUE)
   source("exitTab.R", local = TRUE)
   source("changelogTab.R", local = TRUE)
   
@@ -223,7 +220,7 @@ shinyServer <- function(input, output, session){
   
   # reload guard is javascript function that prevents application from closing. Must be set to FALSE 
   # to allow application to close session
-  reloadGuardOn <- reactiveVal(TRUE)
+  reloadGuardOn <- reactiveVal(FALSE)
   sessionOver <- reactiveVal(FALSE)
   
   # useSampleData is set to TRUE if the user chooses to run the Toolkit with the sample dataset provided
@@ -241,11 +238,13 @@ shinyServer <- function(input, output, session){
   startDQ <- reactiveVal(NULL)
   
   # hubInfo is a reactive variable that indicates whether or not the user arrived at the application 
-  # with a valid token (fromHub will be TRUE) and stores the details about the user if they have arrived 
+  # with a valid token (fromHub will be TRUE if that token is associated with a data request) 
+  # and stores the details about the user if they have arrived 
   # with a valid token
   hubInfo <- reactiveValues(
     fromHub = NULL,
-    userDetails = NULL
+    userDetails = NULL,
+    dataRequest = FALSE
   )
   # recordDeleted reactive variable to indicate that record in Harmonist 18 security has been deleted
   # if the user has entered with an encrypted token from the Hub
@@ -253,8 +252,12 @@ shinyServer <- function(input, output, session){
   
   # testUser is a reactive variable that will prevent the creation of records in Harmonist 17
   # if TRUE
-  # 
+  # probably take this out JUDY
   testUser <- reactiveVal(FALSE)
+  
+  # authenticatedUser will be TRUE once user token has been confirmed in REDCap
+  # Once session ends, set as FALSE
+  authenticatedUser <- reactiveVal(FALSE)
   
   # resetFileInput - reactive resetFileInput$reset value to indicate if user is starting over with new files
   # initially, reset = FALSE. If user chooses uploading a new dataset, reset = TRUE 
@@ -318,13 +321,14 @@ shinyServer <- function(input, output, session){
   # getUserInfo ------------------------------------------------------
   # reactive variable to retrieve details about user if entered from the Hub, NULL otherwise
   getUserInfo <- reactive({
+    # if no hub, then no authorization?
     if (projectDef$hub_y != "1") return(NULL)
     query <- parseQueryString(session$clientData$url_search)
     encryptedToken <- query[["tokendt"]]
     if (is.null(encryptedToken)){
+      authenticatedUser(FALSE)
       return(NULL)
     }
-
     invalidToken <- FALSE
     decryptedToken <- getCrypt(encryptedToken,"d")
     if (is.null(decryptedToken)) invalidToken <- TRUE 
@@ -334,28 +338,52 @@ shinyServer <- function(input, output, session){
       if (inherits(userInfo, "postFailure")) {
         errorMessageModal(messageHeader = "REDCap Error",
                           message = "Inability to access REDCap at this time",
-                          secondaryMessage = "Session will continue without access to data submission")
+                          # secondaryMessage = "Session will continue without access to data submission")
+                          secondaryMessage = "Please contact judy.lewis@vumc.org if this error persists")
         updateTabItems(session,"tabs", "welcome")
+        # no longer allow open access to Toolkit if authentication required
+        if (authRequired){
+          invalidToken <- TRUE
+        }
         return(NULL)
       }
 
-      if (userInfo == "" || is_empty(userInfo)) invalidToken <-  TRUE
-      else {
+      # check once more - if valid token then userInfo will be list of 14 elements
+      if (is_empty(userInfo) || length(userInfo) < 2){
+        invalidToken <-  TRUE
+      } else {
         expiration <- userInfo$tokenexpiration_ts
         # if no expiration date in record OR if expiration date has passed, invalid token
         if (is_blank(expiration) || (Sys.Date() - as.Date(expiration) > 1)) invalidToken <- TRUE
         else {
           userInfo$decryptedToken <- decryptedToken
           cat("Session:", isolate(sessionID())," valid token","\n", file = stderr())  
+          authenticatedUser(TRUE)
         }
+      }
+    }
+    
+    if (!invalidToken){
+      hubPermissionInfo <- getOneRecord(tokenForHarmonist5, userInfo$uploaduser_id, projectName = "Harmonist 5")
+      if ("harmonist_regperm" %in% names(hubPermissionInfo)){
+        userInfo$harmonist_regperm <- hubPermissionInfo$harmonist_regperm
+      } else {
+        userInfo$harmonist_regperm <- ""
       }
     }
 
     if (invalidToken){
-      # ask steph here about modal
-      errorMessageModal(messageHeader = "Invalid or expired Toolkit token",
-                        message = "Please log in to the Hub again and choose Upload Data.", 
-                        secondaryMessage = "You may also continue this session without access to data submission option")
+      if (authRequired){
+        authenticatedUser(FALSE)
+      }
+      
+      errorMessageModal(messageHeader = "Invalid, missing, or expired Toolkit token",
+                        secondaryMessage = "")
+                      #  message = tags$b("Please request an ",a("IeDEA Toolkit token",
+                      #                                 href="https://bit.ly/iedeatoken", target="_blank")))
+                      #  message = "Please request a Toolkit token **give bit.ly link here?** or choose a data request in the Hub")
+                      #  message = "Please log in to the Hub again and choose Upload Data.", 
+                      #  secondaryMessage = "You may also continue this session without access to data submission option")
       updateTabItems(session,"tabs", "welcome")
       return(NULL)
     }
@@ -367,20 +395,31 @@ shinyServer <- function(input, output, session){
  #  At beginning of session this will be triggered and will in obtain user info and determine
  #  if the user entered from the hub or not
   observeEvent(session$token,{
+    authenticatedUser(FALSE)
     print(paste("session =", session$token, "usage = ", sum(unlist(usage))))
     postProgress(list(action_step = "start"))
-
     hideTab(inputId = "changelog", target = "Changelog")
     
     # if a user is testing the toolkit, no need to add progress to Harmonist 17
     query <- parseQueryString(session$clientData$url_search)
-    if (!is.null(query[["test"]]) && query[["test"]]=="T") testUser(TRUE)
+
+    # fromHub is TRUE if a user is responding to a data request in the Hub
+    hubInfo$fromHub <- FALSE 
 
     userInfo <- getUserInfo()
-    if (is.null(userInfo)){
+    if (is.null(userInfo) && authRequired && !authenticatedUser()){
+      print("not authenticated user")
+      hubInfo$fromHub <- FALSE
+      hubInfo$userDetails <- defaultUserInfo
+    } else if (is.null(userInfo)){
+      print("auth not required and unknown user")
       hubInfo$fromHub <- FALSE
       hubInfo$userDetails <- defaultUserInfo # in definitions.R
     } else {
+      print("we do have user info")
+      if (userInfo$datacall_id != ""){
+        hubInfo$dataRequest <- TRUE
+      }
       hubInfo$fromHub <- TRUE
       updateTabItems(session,"tabs", "upload")
       regionID <- as.numeric(userInfo[["uploadregion_id"]])
@@ -431,6 +470,8 @@ shinyServer <- function(input, output, session){
     if (is.null(hubInfo$fromHub)) return(NULL)
     if (projectDef$hub_y != "1") return(NULL)
     if (hubInfo$fromHub){
+      # if no active data request
+      if (!hubInfo$dataRequest) return(NULL)
       
       hub_url <- paste0(plugin_url, "?token=",
                        userDetails()$uploadhub_token, "&option=sop",
@@ -497,6 +538,7 @@ shinyServer <- function(input, output, session){
     errorCount(0)
     errorRows(0)
     errorExcess(FALSE)
+    reloadGuardOn(TRUE)
     # if no data has been uploaded before, and if the session start time
     # was more than 2 minutes ago, that means the session hasn't really started. 
     # The application has been idle so reset the session start time as now
@@ -505,12 +547,13 @@ shinyServer <- function(input, output, session){
       sessionStartTime(Sys.time())
     }
     # if it's the first time data uploaded and user is from Hub, delete token
-    if (hubInfo$fromHub && !recordDeleted()){
+    # changed to only delete token if responding to data request
+    if (hubInfo$dataRequest && !recordDeleted()){
       if (hubInfo$userDetails$decryptedToken != "tokenjudy"){
        result <- deleteOneRecord(tokenForHarmonist18, hubInfo$userDetails$decryptedToken)
        if (inherits(result, "postFailure")) {
          # record NOT deleted, so this means that someone could re-use the
-         # token later to possibly upload another dataset (this is okay)
+         # token later to possibly upload another dataset 
        } else {
          recordDeleted(TRUE)
        }
@@ -692,7 +735,8 @@ shinyServer <- function(input, output, session){
     if (projectDef$hub_y != "1") return(rjson::fromJSON(file = "concept0.json"))
     if (!hubInfo$fromHub) return(rjson::fromJSON(file = "concept0.json"))
     cat("Session:", isolate(sessionID())," user is from the Hub","\n", file = stderr())  
-
+    # if this is a Hub user but no data call
+    if (!hubInfo$dataRequest) return(rjson::fromJSON(file = "concept0.json"))
     record_id_Harmonist3 <- hubInfo$userDetails$datacall_id
     conceptInfo <- getOneRecord(tokenForHarmonist3, record_id_Harmonist3, projectName = "Harmonist 3", formName = "data_specification")
     if (inherits(conceptInfo, "postFailure")) {
@@ -735,6 +779,9 @@ shinyServer <- function(input, output, session){
     if (is.null(requestedFormats)) requestedFormats <- "None specified"
     conceptInfo$requestedFormats <- requestedFormats
     conceptInfo$requestedExtensions <- requestedExtensions
+    conceptInfo$sop_inclusion <- removeHTML(conceptInfo$sop_inclusion)
+    conceptInfo$sop_exclusion <- removeHTML(conceptInfo$sop_exclusion)
+    
     cat("Session:", isolate(sessionID()),
         " preferred formats: ", requestedFormats, "\n", file = stderr())
     return(conceptInfo)
@@ -744,7 +791,9 @@ shinyServer <- function(input, output, session){
   output$requestStatus <- renderUI({
     if (projectDef$hub_y != "1") return(NULL)
     if (is.null(hubInfo$userDetails)) return(NULL)
-    
+    # if (!hubInfo$dataRequest) return(NULL) now that auth required,
+    # if user details exist, show them
+
     if (hubInfo$fromHub){
       region <- userDetails()$regionCode
       name <- paste(userDetails()$uploaduser_firstname, userDetails()$uploaduser_lastname)
@@ -953,6 +1002,23 @@ shinyServer <- function(input, output, session){
       names(myfile)[badColumns] <- paste0(iconv(names(myfile)[badColumns], from = "", to = "ASCII",""),
                                           "_INVALID_CHARACTERS_IN_VARIABLE_NAME")
     }
+    if (networkName == "HEPSANET" && tableName == indexTableName){
+
+      myfile$cohort <- NA
+      countriesPresent <- unique(myfile$country)
+      countryCodeListNum <- tableDef[[indexTableName]]$variables$country$code_list_ref
+      
+      for (countryIndex in countriesPresent){
+        if (!countryIndex %in% names(codes[[countryCodeListNum]])) next
+        countryName <- codes[[countryCodeListNum]][[countryIndex]]
+        cohortColumn <- cohortNames[[countryName]]
+        if (!exists(cohortColumn, myfile)) next
+        rowsInCountry <- which(myfile$country == countryIndex)
+        cohortCodeListNum <- tableDef$ADMIN_OUTCOME$variables[[cohortColumn]]$code_list_ref
+
+        myfile[rowsInCountry, "cohort"] <- codes[[cohortCodeListNum]][myfile[rowsInCountry, cohortColumn]] # paste0(countryIndex, ".", myfile[rowsInCountry, cohortColumn])
+      }
+    }
     print("End ReadOneTable")
     return(myfile)
   }
@@ -971,6 +1037,7 @@ shinyServer <- function(input, output, session){
     if (is.null(loaded) || is.null(loaded$files))
       return(NULL)
     allfiles <- loaded$files
+
     # confirm that all files have extensions reflecting valid file formats for Harmonist (stored in definitions.R)
     allfiles$extension <- tolower(file_ext(allfiles$name))
     nonDESTypes <- !allfiles$extension %in% validFileTypes
@@ -990,7 +1057,7 @@ shinyServer <- function(input, output, session){
       resetFileInput$reset <- TRUE
       return(NULL)
     }
-    
+
     allfiles$tableName <- tolower(tolower(file_path_sans_ext(allfiles$name)))
     invalidFiles <- allfiles[which( (!allfiles$tableName %in% tolower(names(tableDef))) |
                                       nonDESTypes),]
@@ -1058,7 +1125,7 @@ shinyServer <- function(input, output, session){
     }
     
     nonmatchingFileFormats <- c()
-    if (hubInfo$fromHub){
+    if (hubInfo$fromHub && hubInfo$dataRequest){
       requestedFormats <- concept()$requestedFormats
       requestedExtensions <- concept()$requestedExtensions
       uploadedFormats <- validFiles$extension
@@ -1181,7 +1248,7 @@ shinyServer <- function(input, output, session){
       if (is.null(result)){
         return(NULL)
       }
-   
+
       # keep track of table with headers but no records that aren't blank or NA
       if (is_table_blank(result)) blankTables <- c(blankTables, tableName)
 
@@ -1304,7 +1371,7 @@ shinyServer <- function(input, output, session){
     tablesAndVariables$missingConceptColumnsFormatted <- missingColsRequestedFormatted
     tablesAndVariables$missingConceptColumns <- missingColsRequested
     tablesAndVariables$missingVariableCount <- missingVariableCount
-    if (hubInfo$fromHub){
+    if (hubInfo$fromHub && hubInfo$dataRequest){
       results <- createListsOfTablesAndVariablesHub(uploaded, tableDef)
     } else {
       results <- createListsOfTablesAndVariablesNoHub(uploaded, tableDef)
@@ -1312,7 +1379,7 @@ shinyServer <- function(input, output, session){
     
     tablesAndVariables$details <- results
     postProgress(list(action_step = "read_files", 
-                      des_variables = as.character(jsonlite::toJSON(results$des_variables)),
+                      des_variables = as.character(jsonlite::toJSON(results$all_des_variables)),
                       non_des_variables = as.character(jsonlite::toJSON(results$non_des_variables)),
                       des_tables = paste(names(uploaded), collapse = ","),
                       non_des_files = paste(uploadList()$ExtraFiles, collapse = ","),
@@ -1346,8 +1413,8 @@ shinyServer <- function(input, output, session){
     # take one extra step to confirm extraVars are truly column names of index table
     extraVars <- intersect(extraVars, names(indexTable))
     # unique to IeDEA
-    if ("CENTER" %in% names(indexTable)) {
-      extraVars <- c(extraVars, "CENTER")
+    if ("CENTER_ENROL" %in% names(indexTable)) {
+      extraVars <- c(extraVars, "CENTER_ENROL")
     }
     if (is_empty(extraVars)) return(results)
     # only allow character columns to be grouping columns (not dates, etc)
@@ -1447,6 +1514,7 @@ shinyServer <- function(input, output, session){
     # set appBusy TRUE
     appBusy <<- TRUE
     formattedTables <- forceModeTables(finalGroupChoice(), uploadedTables())
+    
     appBusy <<- FALSE
     return(formattedTables)
   })
@@ -1460,6 +1528,7 @@ shinyServer <- function(input, output, session){
 
     # initialize data frame to accumulate error details
     errorFrame <- list()
+    
     resources <- list(
       finalGroupChoice = finalGroupChoice(),
       formattedTables = formattedTables(),
@@ -1503,7 +1572,11 @@ shinyServer <- function(input, output, session){
                       toolkituser_id = userDetails()$uploaduser_id,
                       datarequest_id = userDetails()$datacall_id,
                       upload_filenames = paste(input$loaded$name,collapse = ","),
+                      des_variables = as.character(jsonlite::toJSON(resources$tablesAndVariables$details$all_des_variables)),
+                      non_des_variables = as.character(jsonlite::toJSON(resources$tablesAndVariables$details$non_des_variables)),
+                      des_tables = paste(resources$uploadList$AllDESTables, collapse = ","),
                       num_patients = uniqueN(resources$formattedTables[[indexTableName]][[patientVar]]),
+                      programs = paste(as.character(unique(sanitizeNames(resources$formattedTables[[indexTableName]][[defGroupVar]]))), collapse = ", "),
                       error_summary = as.character(jsonlite::toJSON(summaries$summaryFrames$summaryFrameWithCodes))))
     return(list(
       "totalErrors" = nrow(errorFrame),
@@ -1527,9 +1600,11 @@ shinyServer <- function(input, output, session){
   
   output$menu <- renderMenu({
     if (is.null(hubInfo$fromHub)) return(NULL)
+    if (is.null(hubInfo$userDetails)) return(NULL)
+
     headingText <- "ACTIONS"
     conceptBadge <- NULL
-    if (hubInfo$fromHub){
+    if (hubInfo$fromHub && hubInfo$dataRequest){
       conceptMessage <- hubInfo$userDetails$uploadconcept_mr
       conceptBadge <- tagList(span(conceptMessage, class="badge badge-active"))
       
@@ -1557,7 +1632,6 @@ shinyServer <- function(input, output, session){
       menuItem("Visualize data", 
                tabName = "interactivePlots", icon = icon("chart-bar")),
       menuItem("Help", tabName = "help", icon = icon("question-circle")),
-      menuItem("Provide feedback", tabName = "feedback", icon = icon("envelope")),
       menuItem("", tabName = "changelog")
     )
   })

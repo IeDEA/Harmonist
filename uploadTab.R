@@ -1,3 +1,20 @@
+output$uploadPage <- renderUI({
+  if (authRequired && !authenticatedUser()){
+    return(tags$h3(class = "row_text title", notAuthenticatedMessage))  
+  }
+  
+  fluidPage(
+    uiOutput("tooBusyMessage"),
+    uiOutput("uploadIntro"),
+    uiOutput("dataRequestInfo"),
+    uiOutput("uploadMissingSummary"),
+    uiOutput("uploadFileFormatError"),
+    uiOutput("uploadSummary"),
+    uiOutput("selectFiles")
+  )
+})
+
+
 
 collapseStatus <- reactiveValues(
   noActive = FALSE,
@@ -296,7 +313,7 @@ getContactDisplay <- function(contact, datacontactFlag = FALSE){
 # Show user details about the current data request
 dataRequestInfo <- reactive({
   if (projectDef$hub_y != "1") return(NULL)
-  if (!hubInfo$fromHub){
+  if (!hubInfo$fromHub || !hubInfo$dataRequest){
     # at this point this is specific to the IeDEA Hub
     box(
       collapsible = TRUE,
@@ -516,8 +533,10 @@ output$uploadSummary <- renderUI({
       if (projectDef$datamodel_url_y == "1"){
         deprecatedMessage <- div(
           tags$em(
-            tags$span("Note: Deprecated variables are shown in red. See", 
-                      tags$a(tags$u("iedeades.org"), href="http://iedeades.org", 
+            tags$span("Note: Deprecated variables are shown in red. See the ",
+                      networkName,
+                      tags$a(tags$u("data model browser"), 
+                             href=projectDef$datamodel_url,
                              target="_blank", style= "color: #dd4b39"),
                       "for details.", style= "color: #dd4b39")
           )
@@ -740,7 +759,7 @@ observeEvent(input$testStop,{
 })
 
 observeEvent(input$runWithSample,{
-  if (!hubInfo$fromHub){
+  if (!hubInfo$dataRequest){
     useSampleData(TRUE)
     resetFileInput$newData <- TRUE
     resetFileInput$reset <- FALSE

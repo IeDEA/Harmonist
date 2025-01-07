@@ -39,18 +39,18 @@ findCodeRecords <- function(df, codeVar, codeVarSym, codeCondition, codeValLabel
   } else if (codeCondition == "missing"){
     # records with date condition that are missing an entry for codeVar
     badRecords <- df %>% 
-      filter(!!codeVarSym == "Missing")
+      filter(!!codeVarSym == missingCode) #"Missing")
     message <- paste(codeVar, "is blank (missing)", collapse = " ")
   } else if (codeCondition == "not_missing"){
     # records with date condition that are missing an entry for codeVar
     badRecords <- df %>% 
-      filter(!!codeVarSym != "Missing")
+      filter(!!codeVarSym != missingCode) #"Missing")
     message <- paste(codeVar, "is not blank (missing)", collapse = " ")
   } else if (codeCondition == "missing_or_unknown"){
     # records with date condition that are missing an entry for codeVar or are
     # coded "Unknown" for codeVar
     badRecords <- df %>% 
-      filter(!!codeVarSym %in% c("Missing", textForUnknown))
+      filter(!!codeVarSym %in% c(missingCode, textForUnknown)) #"Missing"
     message <- paste(codeVar, "is blank (missing) or coded as",
                       textForUnknown,
                       collapse = " ")
@@ -58,7 +58,7 @@ findCodeRecords <- function(df, codeVar, codeVarSym, codeCondition, codeValLabel
     # records with date condition that are missing an entry for codeVar or are
     # coded "Unknown" for codeVar
     badRecords <- df %>% 
-      filter(! (!!codeVarSym %in% c("Missing", textForUnknown)))
+      filter(! (!!codeVarSym %in% c(missingCode, textForUnknown)))
     message <- paste(codeVar, "has an entry (other than the code for",
                       paste0(textForUnknown, ")"),
                       collapse = " ")

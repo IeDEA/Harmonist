@@ -50,3 +50,9 @@ if (networkName == "IeDEA"){
 }
 
 #################################################################################
+
+if (networkName == "HEPSANET"){
+  temp <- updateModal("Checking for agreement between cohort and country", 
+                      temp$num, temp$last)
+  errorFrame <- checkCohortName(errorFrame, resources)
+}

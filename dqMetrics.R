@@ -263,11 +263,11 @@ summarizeDQMetrics <- function(errorFrame, tableRowsByGroup, formattedTables, gr
     toInclude <- tablesAndVariables$matchingColumns
   }
   
-  groupLevels <- tableRowsByGroup$tblBAS[[groupingVar]]
+  groupLevels <- tableRowsByGroup[[indexTableName]][[groupingVar]]
   if (is.factor(groupLevels)) {
     groupLevels <- as.character(groupLevels)
   }
-  groupLevels <- sort(groupLevels[groupLevels != "Missing"]) #IS THIS NECESSARY?
+  groupLevels <- sort(groupLevels[groupLevels != missingCode]) #"Missing"]) #IS THIS NECESSARY?
   
   for (tableName in names(toInclude)){
     print(paste0("table = ", tableName))

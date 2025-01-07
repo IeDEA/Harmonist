@@ -14,7 +14,7 @@ dataQualityChecks <- function(errorFrame, resources){
   # check coded variables
   temp <- updateModal("Checking coded variables",temp$num, temp$last)
   errorFrame <- checkCodedVariables(errorFrame, resources)
-  
+
   # check all tables with PATIENT variable for PATIENTs that aren't in index table
   temp <- updateModal(paste0(
     "Checking tables for Patient IDs that don't exist in ",
@@ -75,16 +75,15 @@ dataQualityChecks <- function(errorFrame, resources){
   source("specificDataChecks.R", local = TRUE)
   # call domain specific data quality checks and add to errorFrame
   source("doSpecificChecks.R", local = TRUE)
+
     
   ################################################################################
   ##### ADD and CALL CUSTOM DATA QUALITY CHECKS HERE #############################
     
   source("customChecks.R", local = TRUE)
 
-  ################################################################################
-    
-
-  ################################################################################
+ 
+  ###################################################################################
   # bind list of errors into one detailed data frame
   
   updateModal("Aggregating errors and warnings")
@@ -126,7 +125,6 @@ summarizeAllErrors <-  function(errorFrame, groupVar, resources){
   unknownCodeSummaryByGroup <- summarizeUnknownCodesByGroup(groupVar, resources)
   print(Sys.time())
   print("unknown code Summary")
-  
   unknownCodeSummary <- summarizeUnknownCodes(unknownCodeSummaryByGroup)
   print(Sys.time())
   print("missing by program Summary")
@@ -136,7 +134,6 @@ summarizeAllErrors <-  function(errorFrame, groupVar, resources){
   missingSummaryFrame <- summarizeMissing(missingSummaryFrameByGroup)
   print(Sys.time())
   print("missing and unknown Summary by program")
-  
   missingAndUnknownByGroup <- combineMissingAndUnknownByGroup(missingSummaryFrameByGroup,
                                                               unknownCodeSummaryByGroup,
                                                               groupVar)

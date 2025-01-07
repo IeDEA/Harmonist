@@ -1,0 +1,312 @@
+.no-padding{padding:0;}
+.container-fluid {padding-left:40px;}
+.pleft{padding-left:5px;}
+.content-wrapper, .right-side {
+  background: #fff;
+}
+
+.skin-blue .main-header .navbar {
+  background: #f8f8f8;
+    min-height: 60px;
+  box-shadow: none;
+}
+.main-header{
+  background: #f8f8f8;
+    border-bottom: 1px solid #e7e7e7;
+  padding: 10px;
+}
+.harmonist-logo{
+  padding-left:47px;
+  font-weight: bold;
+}
+.harmonist-title{
+  padding-left: 29px;
+  color: #286090;
+}
+.sidebar-toggle{
+  display:none;
+}
+.badge-request{
+  background-color: #8c8c8c;
+    padding: 5px;
+}
+.badge-active{
+  padding: 5px;
+  color: #333;
+    background-color: #fff;
+    border: 1px solid #ccc;
+  float: right;
+  margin-top: -1px!important;
+}
+.badge-critical{
+  background-color: #6f0000;
+}
+.badge-error{
+  background-color: red;
+}
+.badge-warn{
+  background-color: #f39c12;
+}
+
+.alert-critical{
+  background-color: #6f0000;
+    color: white;
+}
+
+#requestStatus{
+padding-right: 60px;
+}
+
+
+/***LEFT MENU***/
+  .skin-blue .main-sidebar {
+    background: #f9f9f9;
+      box-shadow: 3px 5px 5px #dfdfdf;
+    padding-left: 0px;
+    padding-right: 0px;
+    padding-top: 60px;
+  }
+.skin-blue .main-sidebar .sidebar .sidebar-menu a {
+  color: rgb(100,100,100);
+  font-size: 14px;
+}
+@media (min-width: 768px)
+.main-sidebar, .left-side {
+  width: 260px;
+}
+.main-sidebar, .left-side {
+  width: 260px;
+}
+a[data-value=menu-header] {
+  background-color:#8c8c8c !important;
+    color: #fff !important;
+    cursor:auto;
+}
+.skin-blue .main-header .logo, .skin-blue .main-header .logo:hover {
+  background: #f8f8f8;
+    color: #0d347c;
+    font-weight: bold;
+  font-size: 25px;
+}
+.skin-blue .main-sidebar .sidebar .sidebar-menu a:hover,.skin-blue .main-sidebar .sidebar .sidebar-menu a[data-value=welcome]:hover,.skin-blue .main-sidebar .sidebar .sidebar-menu a:focus,.skin-blue .main-sidebar .sidebar .sidebar-menu .active a[data-value=welcome]:focus,.skin-blue .main-sidebar .sidebar .sidebar-menu a:active,.skin-blue .main-sidebar .sidebar .sidebar-menu .active a[data-value=welcome]:active,.skin-blue .main-sidebar .sidebar .sidebar-menu .active a,.skin-blue .main-sidebar .sidebar .sidebar-menu .active a[data-value=welcome] {
+  background:#D6EFFF;
+}
+
+.skin-blue .main-sidebar .sidebar .sidebar-menu a[data-value=welcome]{
+  background:#fff;
+    border:0;
+}
+
+.row_text,.rowSelectFiles,.rowactiveDataRequest,.rowUploadComplete, .rowNoActiveDataRequest,.shiny-html-output .row{
+  padding-left:20px;
+}
+.faqHeader{
+  padding-left: 50px;
+}
+.faq{
+  padding-left:100px;
+}
+.rowDataUploadGuidelines{
+  padding-left:40px;
+}
+.title{
+  padding-bottom: 20px;
+}
+.subtitle{
+  padding-bottom: 10px;
+}
+.criticalWarning{
+  padding-bottom: 10px;
+  padding-right: 40px;
+}
+.rowSelectFiles .box-body{
+  color: #fff;
+    background: #fff;
+    border: 1px solid #3c8dbc
+}
+.rowSelectFiles .box-header, .rowSelectFiles .box{
+  border: 1px solid #3c8dbc;
+  background: #3c8dbc;
+}
+.rowSelectFiles .box-header .box-title{
+  color:#fff;
+}
+.selectize-input,.form-control{
+  border-color: #d2d6de !important;
+}
+.rowUploadComplete .col-sm-4:nth-of-type(1) .box-header{
+  background-color:#5cb85c !important;
+}
+.box{
+  box-shadow:0 1px 1px rgba(0,0,0,.1);
+}
+#welcomeUI .box-header{
+border-top: 1px solid #ddd;
+}
+.rowUploadComplete .col-sm-4:nth-of-type(1) .box{
+  border-color: #5cb85c !important;
+}
+.rowUploadComplete .col-sm-4:nth-of-type(2) .box-header{
+  background-color:#f5f5f5 !important;
+}
+.rowUploadComplete .col-sm-4:nth-of-type(2) .box{
+  border-color: #d2d6de !important;
+    background-color:#fff !important;
+}
+#activeDataRequest .box,#noActiveDataRequest .box{
+border: 1px solid #d2d6de !important;
+}
+#activeDataRequest .box .box-body, #noActiveDataRequest .box .box-body{
+background-color:#fff !important;
+  }
+#activeDataRequest,#noActiveDataRequest{
+padding-right:30px;
+}
+.backIedea{
+  font-size: 14px;
+  float: right;
+  padding-right:40px;
+}
+.row.toolkit {
+  margin-top: 15px;
+}
+.step1_concept_id{
+  font-size:18px;
+}
+.container-left{
+  margin-left:20px;
+}
+
+/* Jeremy's changes */
+.main-header .harmonist-logo {
+font-size: x-large;
+color: #0073b7;
+}
+.main-header .request-status {
+float: right;
+padding: 5px;
+margin-top: 5px;
+}
+.harmonist-error-table .nav > li > a {
+padding: 7px 10px;
+}
+.btn-success {
+background-color: #00a65a !important;
+color: #fff !important;
+}
+.box{
+border: 1px solid #ddd;
+box-shadow:none;
+}
+.box .box-header a{color:#444;}
+.box .box-header{
+color: #333;
+background-color: #f5f5f5;
+}
+.box-body{
+background-color:#fff;
+border-top: 1px solid #ddd;
+}
+/*IeDEA Tables*/
+.des-main {
+background-color: #FFC000;
+color: #111;
+}
+.des-labs{
+background-color: #9cce77;
+color: #111;
+}
+.des-dis{
+background-color: #87C1E9;
+color: #111;
+}
+.des-meds{
+background-color: #FB8153;
+color: #111;
+}
+.des-preg{
+background-color: #D7AEFF;
+color: #111;
+}
+.des-meta{
+background-color: #BEBEBE;
+color: #111;
+}
+.des-oth{
+background-color: #f0f0f5;
+color: #111;
+}
+#dataQualityChecks .modal-body .fa-check{
+color:#00a65a !important;
+}
+#dataQualityChecks .modal-body .fa-spinner{
+color: #0073b7;
+}
+#dataQualityChecks .modal-header{
+background-color:#00a65a;
+color:#fff;
+}
+#errorModal .modal-header{
+background-color:#dd4b39;
+color:#fff;
+}
+#infoModal .modal-header{
+background-color:#3c8dbc;
+color:#fff;
+}
+#tabset1 li{
+background-color:#f2f2f2;
+border-radius:3px;
+}
+#tabset1 li .active{
+background-color:#fff;
+border-top-left-radius: 4px;
+border-top-right-radius: 4px;
+}
+#dataRequestInfo ul{
+padding-top:0;
+padding-left:15px;
+}
+
+#errorSummarySep tr.selected td{
+background-color: #D6EFFF !important;
+}
+#errorSummarySep .fa-check{
+color:#00a65a;
+}
+.submit-success-msg{
+padding-left:35px !important;
+padding-right:40px;
+}
+/* Add version info to the bottom of the sidebar */
+#sidebarCollapsed {
+bottom: 0;
+}
+#sidebarItemExpanded {
+height: 100%;
+position: relative;
+}
+#versionInfo {
+color: lightgray;
+padding: 1em;
+text-align: center;
+font-size: 11px;
+bottom: 0;
+position: absolute;
+left: 0;
+right: 0;
+}
+#versionInfo p {
+padding: 0;
+margin: 0;
+}
+#versionInfo a {
+text-decoration: underline;
+}
+.report_icon{
+border:1px solid #ddd;
+}
+.badge-fix {
+  /* in google chrome, the bottom badge in a table cell hides the table border for some reason */
+  margin-top: -1px;
+}

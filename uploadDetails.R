@@ -84,12 +84,12 @@ createListsOfTablesAndVariablesNoHub <- function(tableList, tableDef){
   names(toDisplay) <- gsub("networkName", networkName,
                            gsub("datamodel_abbrev", projectDef$datamodel_abbrev,
                                 names(toDisplay)))
-  
   # return details for uploadTab upload summary
   return(
     list(
       non_des_count = non_des_count,
-      main_des_variables = removeHTML(des_variables_list),
+      main_des_variables = removeHTML(des_variables_list), #should I remove removeHTML?
+      all_des_variables = des_variables_list,
       extra_des_variables = NULL,
       non_des_variables = non_des_variables,
       variableSummaryToDisplay = toDisplay,
@@ -121,6 +121,7 @@ createListsOfTablesAndVariablesHub <- function(tableList, tableDef){
 
   #create a list of requested des variables by table, highlight deprecated variables with red text
   #
+  des_variables_list <- list()
   main_des_variables_list <- list()
   deprecated_list <- list()
 
@@ -131,6 +132,7 @@ createListsOfTablesAndVariablesHub <- function(tableList, tableDef){
     # First, make list of des variables that were found in uploaded dataset
 
     des_variables <- intersect(names(variableDefs[[tableName]]), names(tableList[[tableName]]))
+    des_variables_list[[tableName]] <- paste(des_variables, collapse = ", ")
 
     # Only if responding to data request:
     # if this table wasn't requested, all of its variables are in the not requested category
@@ -259,6 +261,7 @@ createListsOfTablesAndVariablesHub <- function(tableList, tableDef){
     list(
       non_des_count = non_des_count,
       main_des_variables = removeHTML(main_des_variables_list),
+      all_des_variables = des_variables,
       extra_des_variables = removeHTML(not_requested),
       non_des_variables = non_des_variables,
       variableSummaryToDisplay = toDisplay,

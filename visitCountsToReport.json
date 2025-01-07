@@ -1,0 +1,66 @@
+{
+  "alt":
+  {
+    "table":"ACTIVITY",
+    "displayName": "ALT test",
+    "dateVar": "activity_dt",
+    "codeVal": null
+  },
+  "ast":
+  {
+    "table":"ACTIVITY",
+    "displayName": "AST test",
+    "codeVal": null
+  },
+  "afp":
+  {
+    "table":"ACTIVITY",
+    "displayName": "AFP test",
+    "codeVal": null
+  },
+
+  "hbvdna_vl":
+  {
+    "table":"ACTIVITY",
+    "displayName": "Hepatitis B DNA viral load test",
+    "codeVal": null
+  },
+  "plt":
+  {
+    "table":"ACTIVITY",
+    "displayName": "Platelet count recorded",
+    "codeVal": null
+  },
+
+  "rads_done":
+  {
+    "table":"ACTIVITY",
+    "displayName": "Radiology performed",
+    "codeVal": "yes"
+  },
+  "rads_fibro":
+  {
+    "table":"ACTIVITY",
+    "displayName": "Fibroscan performed",
+    "codeVal": "yes"
+  },
+
+    "activity_dt":
+  {
+    "table": "activity_dt",
+    "displayName": "Activity date",
+    "codeListNum": null
+  },
+  "death_dt":
+  {
+    "table": "ADMIN_OUTCOME",
+    "displayName": "Death",
+    "codeListNum": null
+  },
+  "tx_start_dt":
+  {
+    "table": "TREATMENT",
+    "displayName": "HBV medication started",
+     "codeListNum": null
+  }
+}

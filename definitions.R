@@ -264,14 +264,9 @@ HEATMAPCOLORS <- c(RED_0, RED_20, ORANGE_50, YELLOW_80, LTGREEN_99, GREEN_100, B
 
 # Date order checks in IeDEA - store somewhere else?
 # IeDEA-specific plausible limits ------------------------------------------
-#test <- downloadREDCapFile("numericLimits.json", tokenForHarmonist0C, 1, "numericlimits")
 numericLimits <- rjson::fromJSON(file = "numericLimits.json")
-#test <- downloadREDCapFile("globalDateBeforeChecks.json", tokenForHarmonist0C, 1, "globaldatebefore")
 globalDateBeforeChecks <- rjson::fromJSON(file = "globalDateBeforeChecks.json")
-#test <- downloadREDCapFile("globalDateAfterChecks.json", tokenForHarmonist0C, 1, "globaldateafter")
 globalDateAfterChecks <- rjson::fromJSON(file = "globalDateAfterChecks.json")
-
-#test <- downloadREDCapFile("withinTableDateOrder.json", tokenForHarmonist0C, 1, "withintabledates")
 dateOrders <- rjson::fromJSON(file = "withinTableDateOrder.json") # other than _ed/_sd
 #test <- downloadREDCapFile("datasetSummary.json", tokenForHarmonist0C, 1, "datasetsummary")
 toReport <- rjson::fromJSON(file = "datasetSummary.json") 

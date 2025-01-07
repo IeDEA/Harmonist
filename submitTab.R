@@ -42,12 +42,16 @@ output$submitSummary <- renderUI({
       )
     )
   }
-  
-  # if the user does not have a token OR is using the sample dataset, no option to submit should exist
-  if ((!hubInfo$fromHub) || useSampleData()){
+
+  # JUDY - follow up - if user has "view only access" hubInfo$userDetails$harmonist_regperm = "1"
+  # if the user does not have a token OR is using the sample dataset or is not responding
+  # to data request, no option to submit should exist
+  if ((!hubInfo$fromHub) || useSampleData() || !hubInfo$dataRequest){
     if (networkName == "IeDEA"){
       submitInfo <- tags$p("You may select an active data request on the ", 
-                           a(" IeDEA Hub", href="http://iedeahub.org", target="_blank")," page.")
+                           a(" IeDEA Hub", 
+                             href="https://redcap.vanderbilt.edu/plugins/iedea/index.php?option=upd", 
+                             target="_blank")," page.")
 
     } else {
       submitInfo <- NULL
@@ -63,7 +67,7 @@ output$submitSummary <- renderUI({
             title = span("Submit Data"),
             tagList(
               span(
-                tags$h5("This option is only available when submitting datasets for an active concept. "),
+                tags$h5("This option is only available when submitting datasets for an active concept. Sites should send data to their regional data center."),
                 submitInfo
               )
             )
@@ -74,7 +78,7 @@ output$submitSummary <- renderUI({
   }
   
   # if the user is responding to data request through the hub...
-  if (hubInfo$fromHub){
+  if (hubInfo$fromHub && hubInfo$dataRequest){
     if (resetFileInput$reset) return(tags$h3(class = "row_text title", notReadyMessage))
     if (is.null(startDQ())) return(tags$h3(class = "row_text title", notReadyMessage))
     if (is.null(errorTable()[[1]])) return(tags$h3(class = "row_text title", notReadyMessage))
@@ -345,6 +349,7 @@ output$explainCritical <- renderUI({
   if (resetFileInput$reset) return(NULL)
   if (is.null(startDQ())) return(NULL)
   if (!hubInfo$fromHub) return(NULL)
+  if (!hubInfo$dataRequest) return(NULL)
   if (is.null(errorTable()[[1]])) return(NULL)
   if (is.null(errorTable()$criticalErrors) && is_empty(uploadList()$nonmatchingFileFormats)) return(NULL)
   if (sum(errorTable()$criticalErrors$Count) == 0 && is_empty(uploadList()$nonmatchingFileFormats)) return(NULL)
@@ -386,6 +391,7 @@ output$submitOptions <- renderUI({
   if (resetFileInput$reset) return(NULL)
   if (is.null(startDQ())) return(NULL)
   if (!hubInfo$fromHub) return(NULL)
+  if (!hubInfo$dataRequest) return(NULL)
   if (is.null(errorTable()[[1]])) return(NULL)
   if (!is.null(submitSuccess())) return(NULL)
   

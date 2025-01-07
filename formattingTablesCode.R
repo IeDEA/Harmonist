@@ -44,10 +44,10 @@ addAgeGroupAndGroup <- function(formattedTableData, groupByVar){
   blankDefGroup <- is_blank_or_NA_elements(formattedTableData[[indexTableName]][[defGroupVar]])
   blankGroup <- is_blank_or_NA_elements(formattedTableData[[indexTableName]][[groupByVar]])
   if (any(blankDefGroup)){
-    formattedTableData[[indexTableName]][which(blankDefGroup), defGroupVar] <- "Missing"
+    formattedTableData[[indexTableName]][which(blankDefGroup), defGroupVar] <- missingCode # "Missing"
   }
   if (any(blankGroup)){
-    formattedTableData[[indexTableName]][which(blankGroup), groupByVar] <- "Missing"
+    formattedTableData[[indexTableName]][which(blankGroup), groupByVar] <- missingCode #"Missing"
   }
   for (tableName in tablesAndVariables$tablesToCheckWithPatientID){
     currentTable <- formattedTableData[[tableName]]
@@ -157,7 +157,7 @@ forceModeTables <- function(groupByVar, uploadedTables){
           if (is.numeric(formattedTables[[tableName]][[variableName]])){
              formattedTables[[tableName]][[variableName]] <- factor(formattedTables[[tableName]][[variableName]],
                                                                     levels = c(validCodes, NA),
-                                                                    labels = c(codeLabels, "Missing"),
+                                                                    labels = c(codeLabels, missingCode), #"Missing"),
                                                                     exclude = NULL)
              # now any remaining NA in coded variable vector are due to invalid codes. Make this explicit:
              if (any(is.na(formattedTables[[tableName]][[variableName]]))){
@@ -187,7 +187,7 @@ forceModeTables <- function(groupByVar, uploadedTables){
                                                                    levels = c(validCodes, 
                                                                               codeIndicatingInvalidCodeFormat,
                                                                               NA),
-                                                                   labels = c(codeLabels, "Invalid Code", "Missing"),
+                                                                   labels = c(codeLabels, "Invalid Code", missingCode),# "Missing"),
                                                                    exclude = NULL)
             
             # now any remaining NA in coded variable vector are due to invalid codes. Make this explicit:
@@ -215,7 +215,7 @@ forceModeTables <- function(groupByVar, uploadedTables){
             # set factor levels
             formattedTables[[tableName]][[variableName]] <- factor(formattedTables[[tableName]][[variableName]],
                                                                    levels = c(validCodes, NA), 
-                                                                   labels = c(codeLabels, "Missing"),
+                                                                   labels = c(codeLabels, missingCode), # "Missing"),
                                                                    exclude = NULL)
             # now any new NA in coded variable vector are due to invalid codes. Make this explicit:
             if (any(is.na(formattedTables[[tableName]][[variableName]]))){
@@ -256,8 +256,17 @@ forceModeTables <- function(groupByVar, uploadedTables){
           formattedTables[[tableName]][[variableName]] <- as.Date(formattedTables[[tableName]][[variableName]], 
                                                                   "%Y-%m-%d", origin = "1960-01-01") #SAS origin date
         } else formattedTables[[tableName]][,variableName] <- as.Date(NA)
+      } 
+      # Next, date-time variables, format as date-time
+      else if (variableDefs$variables[[variableName]]$data_format == "YYYY-MM-DD hh:mm"){
+        if (columnClass == "POSIXct"){
+          timeZone <- attributes(formattedTables[[tableName]][[variableName]])[["tzone"]]
+          formattedTables[[tableName]][[variableName]] <- ymd_hm(formattedTables[[tableName]][[variableName]], 
+                                                                  tz = timeZone)
+        } else {
+          formattedTables[[tableName]][[variableName]] <- ymd_hm(formattedTables[[tableName]][[variableName]])
+        }
       }
-      
       # next, if the variable should be categorical, set as factor JUDY revisit this. Any reason to do this?
       else if (variableName %in% isFactor){ #in definitions.R
         # in case there are any blank records in an "isFactor" field, don't create another factor level for ""
@@ -286,6 +295,7 @@ forceModeTables <- function(groupByVar, uploadedTables){
       }
     }
   }
+  
   print("about to add ages")  
   formattedTables <- addAges(formattedTables)
   print("about to add age group and group")  

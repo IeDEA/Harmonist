@@ -60,7 +60,7 @@ output$reportPage <- renderUI({
       actionButton("uploadNew3","Upload new dataset")
     )
   )
-  if (hubInfo$fromHub){
+  if (hubInfo$fromHub && hubInfo$dataRequest){
     step4UI <- fluidRow(class = "rowUploadComplete",
                         box(
                           width = 5,
@@ -79,15 +79,21 @@ output$reportPage <- renderUI({
                         restartBox
     )
   } else {
-    step4UI <- tagList(fluidRow(#class = "rowUploadComplete",
-                        box(
-                          width = 10,
-                          title = span("Note"),
-                          tagList(
-                            tags$p(tags$b("Step 4: Submit Data"), "is available only when responding to an active data request through the",
-                                   a(" IeDEA Hub.", href="http://iedeahub.org", target="_blank"))
-                          ))),
-    fluidRow(
+    if (projectDef$hub_y == 0){
+      nextStep <- NULL
+    } else {
+      nextStep <- fluidRow(
+        box(
+          width = 10,
+          title = span("Note"),
+          tagList(
+            tags$p(tags$b("Step 4: Submit Data"), "is available only when responding to an active data request through the",
+                   a(" IeDEA Hub.", href="http://iedeahub.org", target="_blank"))
+          )))
+    }
+    step4UI <- tagList(
+                      nextStep,
+                      fluidRow(
                         box(
                           width = 5,
                           title = "Revisit Data Quality Results",
@@ -95,7 +101,7 @@ output$reportPage <- renderUI({
                           actionButton("returnStep2", "Return to Step 2")
                         ),
                         restartBox
-    )
+          )
     )
   }
   
@@ -108,7 +114,7 @@ output$reportPage <- renderUI({
     paste0("By default, the report summarizes the required variables in ", indexTableName, ".")
   )
   
-  if (networkName == "IeDEA"){
+  if (networkName %in% c("IeDEA")){ #}, "HEPSANET")){
     dqMetricsUI <-       fluidRow(
       box(
         width = 10,
@@ -162,7 +168,8 @@ output$reportPage <- renderUI({
                      column(width = 6,
                             # tags$b("Customize report"),
                             selectInput("reportType","File format for report",
-                                        choices = c("PDF" = "pdf", "HTML" = "html")),
+                                        choices = c(#"PDF" = "pdf", #pdf complicated for local install
+                                          "HTML" = "html")),
                             uiOutput("programsToInclude") #,
                             #uiOutput("chooseMultipleGroups"),
                             # textInput("datasetDesc",

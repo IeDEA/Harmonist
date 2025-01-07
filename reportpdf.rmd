@@ -40,6 +40,8 @@ params:
   indexTableName: "indexTableName"
   patientVar: "patientVar"
   patientVarSym: "patientVarSym"
+  conceptInfo: "conceptInfo"
+  missingCode: "missingCode"
 ---
 
 
@@ -53,7 +55,13 @@ userDetails <- params$userDetails
 indexTableName <- params$indexTableName
 if (userDetails$uploadconcept_mr == "MR000"){
   headerMessage <- NULL
-} else headerMessage <- paste0("Dataset submitted for Concept ", userDetails$uploadconcept_mr)
+  inclusionMessage <- NULL
+} else {
+  headerMessage <- paste0("Dataset submitted for Data Request ", userDetails$uploadconcept_mr)
+  inclusionMessage <- paste0(" Inclusion criteria: ",
+                             params$conceptInfo$sop_inclusion,
+                             " Exclusion criteria: ", params$conceptInfo$sop_exclusion)
+}
 if (userDetails$uploaduser_id == ""){
   regionMessage <- NULL
   fromHub <- FALSE
@@ -80,10 +88,15 @@ knitr::opts_chunk$set(
 	warning = FALSE
 )
 ```
-
 ## Dataset Summary
-
 Total number of patients in dataset: `r format(params$datasetSummary$totalPatients, scientific = FALSE, big.mark = ",")`
+
+```{r inclusionsection, echo=FALSE,message=FALSE, warning=FALSE, results='asis'}
+if (!is.null(inclusionMessage)){
+  cat("### ", userDetails$uploadconcept_mr, " Inclusion/Exclusion Criteria  ", "\n")
+  cat(inclusionMessage)
+}
+```
 
 ```{r summary2, echo=FALSE,message=FALSE, warning=FALSE, results='asis'}
 sumTables <- params$datasetSummary$tableSummaryKable
@@ -92,7 +105,7 @@ sumSRN <- params$datasetSummary$srnSummaryKable
 
 ```{r listOfPrograms, message=FALSE, warning=FALSE, include=FALSE, results='asis'}
 groups <- sort(unique(tableData[[indexTableName]][[groupVar]]))
-groups <- groups[groups != "Missing"]
+groups <- groups[groups != missingCode] #"Missing"]
 # if no valid groups in dataset, don't include summary of groups
 if (is_empty(groups)){
   sumProgs <- NULL
@@ -142,7 +155,7 @@ if (!is.null(sumProgs)){
 
 ```{r summarytable, echo=FALSE, message=FALSE, warning=FALSE, results='asis'}
 tableToShow <- params$tableOfVariables
-sumVars <- kbl(tableToShow, "latex",caption = "Summary of Uploaded Tables", longtable = T, booktabs = T) %>% 
+sumVars <- kbl(tableToShow, "latex",caption = "Summary of Uploaded Tables", longtable = T, booktabs = T) %>%
   kable_styling(latex_options = c("striped", "repeat_header"),full_width = F)
 
 # this table always has columns table, number of records, and DES Variables
@@ -151,7 +164,7 @@ sumVars <- kbl(tableToShow, "latex",caption = "Summary of Uploaded Tables", long
 numCols <- length(params$tableOfVariables)
 
 if (numCols == 5){
-  sumVars <- sumVars %>% column_spec(3, width = "15em",border_left = T) %>% column_spec(4, "10em",border_left = T)%>% column_spec(5, "10em",border_left = T) 
+  sumVars <- sumVars %>% column_spec(3, width = "15em",border_left = T) %>% column_spec(4, "10em",border_left = T)%>% column_spec(5, "10em",border_left = T)
 } else if (numCols == 4){
    sumVars <- sumVars %>% column_spec(3, width = "20em",border_left = T) %>% column_spec(4, "10em",border_left = T)
 } else if (numCols == 3){
@@ -252,12 +265,12 @@ createAppearanceBarPlot <- function(df){
 
 
 ```{r appearanceHeatmap, echo=FALSE, fig.height=5, fig.width=5.5, fig.cap=paste0("Percent of Patients from ", indexTableName, " Included"), message=FALSE, warning=FALSE, results='asis'}
-# if tblBAS was the only table with PATIENT as a main ID, don't create a heatmap
+#if tblBAS was the only table with PATIENT as a main ID, don't create a heatmap
 if (is.null(params$appearanceSummary)) {
   appearanceHeatmap <- setFakeFigureDim()
 } else {
   # at least one table with PATIENT was shared in addition to tblBAS
-  
+
   # if appearance summary includes a message that means
   # every patient is included in patient-linked tables, so don't create heatmap
   if ("message" %in% names(params$appearanceSummary)){
@@ -270,7 +283,7 @@ if (is.null(params$appearanceSummary)) {
     # if only one additional table was shared, create a bar plot instead of heat map
     if (length(unique(df$table)) == 1){
       appearanceHeatmap <- createAppearanceBarPlot(df)
-    } 
+    }
     if (length(unique(df$table)) > 1) {
       xOrder <- names(params$allTables)
       df[["table"]] <- factor(df[["table"]], levels = xOrder)
@@ -307,7 +320,7 @@ if (params$includeHistograms){
     histHeight <- 4.35
   } else histHeight <- numberOfGraphs*0.57 + 1.425
   }
-  
+
 } else histHeight <- 1 #dummy value since histograms not included
 ```
 
@@ -343,14 +356,14 @@ if (params$includeErrorSummary){
   } else highLevel <- "No errors in dataset"
   cat("\n")
   cat(highLevel, "  ")
-  
+
   if (nrow(params$errorTable$errorOnlySummary) > 0){
     # errorSummary <- kable(params$errorTable$errorOnlySummary, row.names = FALSE, caption = "Error Summary",
     #     longtable = TRUE, booktabs = T,
     #     format = "latex") %>%  kable_styling(latex_options = c("repeat_header"))
     print(params$errorSummaryTables$errors)
   }
-  
+
   if (nrow(params$errorTable$warnOnlySummary) > 0){
        # warnSummary <- kable(params$errorTable$warnOnlySummary, row.names = FALSE, caption = "Warning Summary",
        #   longtable = TRUE, booktabs = T,
@@ -381,7 +394,7 @@ if (params$includeErrorSummary & (nrow(params$missingSummary)>0)){
     kbl(missingSummary, row.names = FALSE, caption = "Summary of Important Missing Variable Entries",
           longtable = TRUE, booktabs = T,
         format = "latex") %>% kable_styling(latex_options = c("repeat_header"))
-   
+
           #, col.names = c("Table","Variable Name","# of Missing Values","% of Table with Missing Values" ))
 }
 ```
@@ -409,7 +422,7 @@ if (params$includeErrorSummary & (nrow(params$missingSummary)>0)){
 if (params$includeErrorSummary &
     (nrow(params$errorTable$missingAndUnknownByGroup) > 0)) {
     cat("\n")
-    dataset <- params$errorTable$missingAndUnknownByGroup %>% filter(!endsWith(variable,"D_A")) 
+    dataset <- params$errorTable$missingAndUnknownByGroup %>% filter(!endsWith(variable,"D_A"))
     df <- dataset
      # update to show percent NOT missing or unknown. Complete and Known
     df$percent <- 100 - df$percent
@@ -418,10 +431,10 @@ if (params$includeErrorSummary &
     df$percent[is.na(df$percent)] <- 100
     df <- df %>% filter( !!groupVarSE %in% groups)
     missingAndUnknownHeatmap <- generateHeatMapStoplightPercent(df, "variable", groupVar, " ")
-   
+
 } else  {
   missingAndUnknownHeatmap <- setFakeFigureDim()
- 
+
 }
 ```
 

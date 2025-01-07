@@ -18,7 +18,7 @@ observeEvent(
 
 initialExitFunctions <- function(){
   reloadGuardOn(FALSE)
-  if (hubInfo$fromHub){
+  if (hubInfo$fromHub && hubInfo$dataRequest){
     hub_data_url <- paste0(plugin_url, "?token=",
                            userDetails()$uploadhub_token,# "&option=dat",  JUDY revisit this
                            "&pid=58325")
@@ -66,6 +66,10 @@ exitActions <- function(){
   cat("Session:", sessionID(),"inside exitActions", 
       as.character(now()), "\n", sep = " ", file = stderr())
   #resetFileInput$reset <- TRUE
+  if (authRequired){
+    authenticatedUser(FALSE)
+    # user no longer authenticated
+  }
 
   lapply(isolate(reactiveValuesToList(trackDetailsForREDCap)), postProgressMultiple)
   #postProgress(list(action_step = "errordetail", viewdetail_count = isolate(errorDetailViewCount())))
