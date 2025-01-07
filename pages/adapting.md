@@ -7,9 +7,9 @@
 - Create a small sample fake dataset and save to a zip file.
 - Create a logo image that has a resolution of 100 x 40 pixels, and another with a resolution of 50 x 20 pixels.
 - Add the network-specific details, logo files, sample dataset zip file, etc. to the Harmonist Toolkit Metadata (0C) REDCap project.
-- Use the Harmonist JSON copy generator feature of the Data Model Browser external module to create JSON files summarizing those three projects. Those JSONs will be stored in records in the Harmonist JSON Files REDCap project.
+- Use the Harmonist JSON copy generator feature of the Data Model Browser external module to create JSON files summarizing those three projects. Those JSONs will be stored in records in the Harmonist JSON Files REDCap project. (In any of the external module projects, click on the Data Model Browser link. In that link, edit out the &NOAUTH= section and refresh. Now the JSON button appears in the browser, near the top beside the download data model button. Click the JSON button to generate the JSON files.)
 - Download the Harmonist Data Toolkit code from [Github](https://github.com/IeDEA/Harmonist), install R and the required packages (Shiny, etc.). This application can be run on your local machine or installed on a server for web access.
-- In REDCap, add API rights to a user (application) account for the relevant Harmonist REDCap projects. Edit the file named redcapTokens.R.example file, replace "your token here" with the API token for the indicated REDCap project. Rename the file redcapTokens.R and save. 
+- In REDCap, add API rights to a user (or application) account for the relevant Harmonist REDCap projects. Edit the file named redcapTokens.R.example file, replace "your token here" with the API token for the indicated REDCap project. Rename the file redcapTokens.R and save. 
 - Edit REDCapURL.R and edit the value of redcap_url to point to your institution's REDCap server.
 - Edit definitions.R and specificDefinitions.R files and customize the variable values for your research group.
 - Edit globalDateBeforeChecks.json and globalDateAfterChecks.json to include details of dates that should be before or after all other dates (and exceptions to those).
