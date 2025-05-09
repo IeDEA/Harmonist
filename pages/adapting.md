@@ -16,6 +16,6 @@
 - Edit numericLimits.json to describe upper and lower plausible limits for relevant numeric variable values.
 - Edit withinTableDateOrder.json to list date pairs that should be in a specific order but don’t follow variable extension rules. Both date variables of each pair must be in the same table.
 - Edit datasetSummary.json to describe information to include in the main Toolkit report summary of patient characteristics.
-- Add custom data quality checks to the file customChecks.R if desired. See [Guidance for Custom Data Quality Checks](pages/customchecks.md) for details.
+- Add custom data quality checks to the file customChecks.R if desired. See [Guidance for Custom Data Quality Checks](customchecks.md) for details.
 
 *Note: If your organization does not have access to REDCap, it is possible to manually edit Harmonist0A, Harmonist0B, and Harmonist 0C JSON files to desribe your data model and research group* 
